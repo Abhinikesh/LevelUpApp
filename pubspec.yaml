@@ -1,0 +1,88 @@
+name: stepup_app
+description: "STEPUP — Gamified Task Progression Mobile App"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.1.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State Management
+  flutter_riverpod: ^2.4.0
+  riverpod_annotation: ^2.3.0
+
+  # Navigation
+  go_router: ^12.0.0
+
+  # HTTP & API
+  dio: ^5.4.0
+  retrofit: ^4.0.0
+
+  # Local Storage
+  flutter_secure_storage: ^9.0.0
+  sqflite: ^2.3.0
+  path: ^1.8.0
+  shared_preferences: ^2.2.0
+
+  # Animations
+  flutter_animate: ^4.3.0
+  lottie: ^3.0.0
+  rive: ^0.12.0
+  confetti: ^0.7.0
+
+  # UI Components
+  google_fonts: ^6.1.0
+  flutter_svg: ^2.0.9
+  cached_network_image: ^3.3.0
+  shimmer: ^3.0.0
+
+  # Camera & Image
+  image_picker: ^1.0.4
+  camera: ^0.10.5+9
+
+  # Audio
+  record: ^5.0.0
+  audioplayers: ^5.2.0
+
+  # Notifications
+  firebase_core: ^2.24.0
+  firebase_messaging: ^14.7.0
+  flutter_local_notifications: ^16.3.0
+
+  # Charts & Progress
+  fl_chart: ^0.65.0
+
+  # Connectivity
+  connectivity_plus: ^5.0.2
+
+  # Haptics
+  haptic_feedback: ^0.1.0
+
+  # Social Auth
+  google_sign_in: ^6.1.6
+
+  # Misc
+  intl: ^0.18.1
+  timeago: ^3.6.0
+  url_launcher: ^6.2.2
+  permission_handler: ^11.1.0
+  uuid: ^4.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  build_runner: ^2.4.7
+  riverpod_generator: ^2.3.9
+  retrofit_generator: ^8.0.0
+  json_serializable: ^6.7.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/animations/
+    - assets/icons/
