@@ -7,29 +7,29 @@ import '../../core/storage/local_database.dart';
 import '../../models/level_model.dart';
 
 // ─────────────────────────────────────────────────────────────
-// State
+// State  (renamed LevelsState to avoid clash with LevelState enum)
 // ─────────────────────────────────────────────────────────────
 
-class LevelState {
+class LevelsState {
   final List<LevelModel> levels;
   final bool isLoading;
   final String? error;
   final bool hasLoaded;
 
-  const LevelState({
+  const LevelsState({
     this.levels = const [],
     this.isLoading = false,
     this.error,
     this.hasLoaded = false,
   });
 
-  LevelState copyWith({
+  LevelsState copyWith({
     List<LevelModel>? levels,
     bool? isLoading,
     String? error,
     bool? hasLoaded,
   }) {
-    return LevelState(
+    return LevelsState(
       levels: levels ?? this.levels,
       isLoading: isLoading ?? this.isLoading,
       error: error,
@@ -39,23 +39,21 @@ class LevelState {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Notifier  (family — takes roadmapId)
+// Notifier  (family — keyed by roadmapId)
 // ─────────────────────────────────────────────────────────────
 
-class LevelNotifier extends StateNotifier<LevelState> {
+class LevelNotifier extends StateNotifier<LevelsState> {
   final Dio _dio;
   final String roadmapId;
 
-  LevelNotifier(this._dio, this.roadmapId) : super(const LevelState()) {
+  LevelNotifier(this._dio, this.roadmapId) : super(const LevelsState()) {
     fetchLevels();
   }
-
-  // ── Fetch levels ──────────────────────────────────────────────
 
   Future<void> fetchLevels({bool forceRefresh = false}) async {
     if (state.isLoading) return;
 
-    // Local cache first
+    // Load from SQLite cache first for instant display
     if (!forceRefresh && !state.hasLoaded) {
       final cached = await LocalDatabase.getLevels(roadmapId);
       if (cached.isNotEmpty) {
@@ -65,9 +63,7 @@ class LevelNotifier extends StateNotifier<LevelState> {
 
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final response = await _dio.get(
-        ApiConstants.roadmapLevels(roadmapId),
-      );
+      final response = await _dio.get(ApiConstants.roadmapLevels(roadmapId));
       final data = response.data;
 
       List<dynamic> list;
@@ -87,24 +83,14 @@ class LevelNotifier extends StateNotifier<LevelState> {
         ..sort((a, b) => a.levelNumber.compareTo(b.levelNumber));
 
       await LocalDatabase.saveLevels(levels);
-
-      state = state.copyWith(
-        levels: levels,
-        isLoading: false,
-        hasLoaded: true,
-      );
+      state = state.copyWith(levels: levels, isLoading: false, hasLoaded: true);
     } on DioException catch (e) {
       final ex = ApiException.fromDioError(e);
       state = state.copyWith(isLoading: false, error: ex.message);
-    } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        error: 'Failed to load levels.',
-      );
+    } catch (_) {
+      state = state.copyWith(isLoading: false, error: 'Failed to load levels.');
     }
   }
-
-  // ── Complete level ────────────────────────────────────────────
 
   Future<bool> completeLevel(
     String levelId, {
@@ -117,21 +103,14 @@ class LevelNotifier extends StateNotifier<LevelState> {
         data: verificationPayload,
       );
       final data = response.data as Map<String, dynamic>;
-
-      // Server returns updated level + next level
-      final updatedLevelData =
-          data['level'] as Map<String, dynamic>?;
-      final nextLevelData =
-          data['nextLevel'] as Map<String, dynamic>?;
+      final updatedLevelData = data['level'] as Map<String, dynamic>?;
+      final nextLevelData = data['nextLevel'] as Map<String, dynamic>?;
 
       final updatedLevels = state.levels.map((l) {
         if (l.id == levelId) {
           return updatedLevelData != null
               ? LevelModel.fromJson(updatedLevelData)
-              : l.copyWith(
-                  isCompleted: true,
-                  completedAt: DateTime.now(),
-                );
+              : l.copyWith(isCompleted: true, completedAt: DateTime.now());
         }
         if (nextLevelData != null) {
           final next = LevelModel.fromJson(nextLevelData);
@@ -144,40 +123,33 @@ class LevelNotifier extends StateNotifier<LevelState> {
       state = state.copyWith(levels: updatedLevels, isLoading: false);
       return true;
     } on DioException catch (e) {
-      // Offline: queue action
       final ex = ApiException.fromDioError(e);
       if (ex.statusCode == null) {
+        // Offline: optimistic update + queue
         await LocalDatabase.addPendingAction('completeLevel', {
           'levelId': levelId,
           'roadmapId': roadmapId,
           'verificationPayload': verificationPayload,
         });
-        // Optimistic update
-        final updatedLevels = state.levels.map((l) {
+        final updated = state.levels.map((l) {
           return l.id == levelId
               ? l.copyWith(isCompleted: true, completedAt: DateTime.now())
               : l;
         }).toList();
-        state = state.copyWith(levels: updatedLevels, isLoading: false);
+        state = state.copyWith(levels: updated, isLoading: false);
         return true;
       }
       state = state.copyWith(isLoading: false, error: ex.message);
       return false;
-    } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        error: 'Failed to complete level.',
-      );
+    } catch (_) {
+      state = state.copyWith(isLoading: false, error: 'Failed to complete level.');
       return false;
     }
   }
 
-  // ── Helpers ──────────────────────────────────────────────────
-
   LevelModel? getActiveLevel() {
     try {
-      return state.levels
-          .firstWhere((l) => l.state == LevelStateEnum.active);
+      return state.levels.firstWhere((l) => l.state == LevelState.active);
     } catch (_) {
       return null;
     }
@@ -194,40 +166,24 @@ class LevelNotifier extends StateNotifier<LevelState> {
   void clearError() => state = state.copyWith(error: null);
 }
 
-// Alias to avoid conflict with model enum name
-typedef LevelStateEnum = LevelState_; // workaround — using extension below
-
-extension LevelModelStateExt on LevelModel {
-  LevelState_ get state {
-    if (isCompleted) return LevelState_.completed;
-    if (!isLocked) return LevelState_.active;
-    return LevelState_.locked;
-  }
-}
-
-enum LevelState_ { completed, active, locked }
-
 // ─────────────────────────────────────────────────────────────
-// Provider  (family)
+// Providers
 // ─────────────────────────────────────────────────────────────
 
-final levelProvider = StateNotifierProvider.family<LevelNotifier, LevelState,
-    String>((ref, roadmapId) {
-  return LevelNotifier(DioClient.instance, roadmapId);
-});
+final levelProvider =
+    StateNotifierProvider.family<LevelNotifier, LevelsState, String>(
+  (ref, roadmapId) => LevelNotifier(DioClient.instance, roadmapId),
+);
 
-/// Convenience: active level for a roadmap
-final activeLevelProvider =
-    Provider.family<LevelModel?, String>((ref, roadmapId) {
+final activeLevelProvider = Provider.family<LevelModel?, String>((ref, roadmapId) {
   final levels = ref.watch(levelProvider(roadmapId)).levels;
   try {
-    return levels.firstWhere((l) => !l.isCompleted && !l.isLocked);
+    return levels.firstWhere((l) => l.state == LevelState.active);
   } catch (_) {
     return null;
   }
 });
 
-/// Convenience: completed count
 final completedLevelsCountProvider =
     Provider.family<int, String>((ref, roadmapId) {
   return ref
