@@ -74,6 +74,19 @@ class RoadmapModel {
     }
   }
 
+  String get proofTypeLabel {
+    switch (type) {
+      case 'gym':
+        return 'Photo Proof';
+      case 'study':
+        return 'Quiz';
+      case 'work':
+        return 'Submission';
+      default:
+        return 'Verification';
+    }
+  }
+
   factory RoadmapModel.fromJson(Map<String, dynamic> json) {
     return RoadmapModel(
       id: json['_id'] as String? ?? json['id'] as String? ?? '',

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/constants/app_text_styles.dart';
@@ -138,9 +137,6 @@ class _StepUpButtonState extends State<StepUpButton>
     }
   }
 
-  Color get _textColor {
-    return Colors.white;
-  }
 
   List<BoxShadow> get _shadows {
     if (_isDisabled) return [];

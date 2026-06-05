@@ -8,7 +8,6 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/utils/helpers.dart';
 import '../../../models/level_model.dart';
-import '../../../shared/providers/level_provider.dart';
 import '../../../shared/widgets/stepup_button.dart';
 import '../../../shared/widgets/stepup_card.dart';
 
@@ -18,13 +17,9 @@ class LevelDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Find level across all loaded roadmaps
-    LevelModel? level;
-    final allStates = ref.watch(levelProvider('').levels); // fallback
-    // Try to find from any cached roadmap provider
-    // In real use, you'd pass roadmapId; here we look up from router params
+    // Level is passed via GoRouter extra; fallback to null
     final extra = GoRouterState.of(context).extra;
-    if (extra is LevelModel) level = extra;
+    final LevelModel? level = extra is LevelModel ? extra : null;
 
     return Scaffold(
       backgroundColor: AppColors.bgDark,

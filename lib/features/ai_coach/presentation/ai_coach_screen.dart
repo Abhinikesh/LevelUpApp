@@ -4,9 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
-import '../../../shared/widgets/stepup_button.dart';
-import '../../../shared/widgets/stepup_card.dart';
-import '../../../shared/widgets/stepup_input.dart';
 
 class AICoachScreen extends ConsumerStatefulWidget {
   const AICoachScreen({super.key});
