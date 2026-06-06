@@ -100,7 +100,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   Text('Your Roadmaps',
                       style: GoogleFonts.syne(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
                   TextButton(
-                    onPressed: () {},
+                    onPressed: () => context.go(AppRoutes.map),
                     child: Text('See All',
                         style: GoogleFonts.inter(fontSize: 13, color: AppColors.brand, fontWeight: FontWeight.w600)),
                   ),

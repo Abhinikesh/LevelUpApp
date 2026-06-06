@@ -8,6 +8,7 @@ import '../../features/auth/presentation/splash_screen.dart';
 import '../../features/auth/presentation/onboarding_screen.dart';
 import '../../features/home/presentation/home_shell.dart';
 import '../../features/home/presentation/dashboard_screen.dart';
+import '../../features/map/presentation/map_list_screen.dart';
 import '../../features/map/presentation/map_view_screen.dart';
 import '../../features/roadmap/presentation/create_roadmap_screen.dart';
 import '../../features/social/presentation/social_screen.dart';
@@ -100,6 +101,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: AppRoutes.dashboard,
             pageBuilder: (context, state) =>
                 _noTransition(const DashboardScreen()),
+          ),
+          GoRoute(
+            path: AppRoutes.map,
+            pageBuilder: (context, state) =>
+                _noTransition(const MapListScreen()),
           ),
           GoRoute(
             path: '${AppRoutes.map}/:roadmapId',

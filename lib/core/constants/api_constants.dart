@@ -35,12 +35,12 @@ class ApiConstants {
   // ── Social ────────────────────────────────────────────────────
   static const String social = '/social';
   static const String friends = '/social/friends';
-  static const String friendRequests = '/social/friends/requests';
   static const String leaderboard = '/social/leaderboard';
-  static String sendFriendRequest(String userId) =>
-      '/social/friends/request/$userId';
+  static const String addFriend = '/social/friends/add';
   static String acceptFriendRequest(String userId) =>
       '/social/friends/accept/$userId';
+  static String removeFriend(String userId) =>
+      '/social/friends/$userId';
 
   // ── Coach ─────────────────────────────────────────────────────
   static const String coach = '/coach';

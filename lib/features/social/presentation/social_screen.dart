@@ -19,7 +19,9 @@ class _SocialScreenState extends ConsumerState<SocialScreen>
   void initState() {
     super.initState();
     _tabCtrl = TabController(length: 2, vsync: this);
-    ref.read(socialProvider.notifier).init();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(socialProvider.notifier).init();
+    });
   }
 
   @override
@@ -30,6 +32,18 @@ class _SocialScreenState extends ConsumerState<SocialScreen>
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<SocialState>(socialProvider, (previous, next) {
+      if (next.error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.coral,
+            content: Text(next.error!),
+          ),
+        );
+        ref.read(socialProvider.notifier).clearError();
+      }
+    });
+
     return Scaffold(
       backgroundColor: AppColors.bgDark,
       body: SafeArea(
@@ -191,7 +205,7 @@ class _FriendsTab extends ConsumerWidget {
           bottom: 24,
           right: 20,
           child: GestureDetector(
-            onTap: () => _showAddFriendSheet(context),
+            onTap: () => _showAddFriendSheet(context, ref),
             child: Container(
               width: 56, height: 56,
               decoration: BoxDecoration(
@@ -209,74 +223,98 @@ class _FriendsTab extends ConsumerWidget {
     );
   }
 
-  void _showAddFriendSheet(BuildContext context) {
+  void _showAddFriendSheet(BuildContext context, WidgetRef ref) {
+    final controller = TextEditingController();
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: AppColors.bgCard,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (_) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(width: 40, height: 4,
-                decoration: BoxDecoration(
-                    color: AppColors.borderLight,
-                    borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 20),
-            Text('Add Friend',
-                style: GoogleFonts.syne(
-                    fontSize: 20, fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary)),
-            const SizedBox(height: 16),
-            Container(
-              height: 52,
-              decoration: BoxDecoration(
-                  color: AppColors.bgDark,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.border)),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: TextField(
-                  style: GoogleFonts.inter(
-                      fontSize: 14, color: AppColors.textPrimary),
-                  decoration: InputDecoration(
-                    hintText: 'Enter email to invite...',
-                    hintStyle: GoogleFonts.inter(
-                        fontSize: 14, color: AppColors.textMuted),
-                    border: InputBorder.none,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 24,
+              right: 24,
+              top: 24,
+              bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(width: 40, height: 4,
+                    decoration: BoxDecoration(
+                        color: AppColors.borderLight,
+                        borderRadius: BorderRadius.circular(2))),
+                const SizedBox(height: 20),
+                Text('Add Friend',
+                    style: GoogleFonts.syne(
+                        fontSize: 20, fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary)),
+                const SizedBox(height: 16),
+                Container(
+                  height: 52,
+                  decoration: BoxDecoration(
+                      color: AppColors.bgDark,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.border)),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: TextField(
+                      controller: controller,
+                      style: GoogleFonts.inter(
+                          fontSize: 14, color: AppColors.textPrimary),
+                      decoration: InputDecoration(
+                        hintText: 'Enter email to invite...',
+                        hintStyle: GoogleFonts.inter(
+                            fontSize: 14, color: AppColors.textMuted),
+                        border: InputBorder.none,
+                      ),
+                    ),
                   ),
                 ),
-              ),
+                const SizedBox(height: 16),
+                GestureDetector(
+                  onTap: () async {
+                    final email = controller.text.trim();
+                    if (email.isEmpty) return;
+                    Navigator.pop(context);
+                    final success = await ref.read(socialProvider.notifier).sendFriendInvite(email);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(success ? 'Invite sent to $email!' : 'Failed to send invite')),
+                      );
+                    }
+                  },
+                  child: Container(
+                    width: double.infinity, height: 52,
+                    decoration: BoxDecoration(
+                        gradient: AppColors.brandGradient,
+                        borderRadius: BorderRadius.circular(14)),
+                    child: Center(
+                      child: Text('Send Invite',
+                          style: GoogleFonts.syne(
+                              fontSize: 16, fontWeight: FontWeight.w700,
+                              color: Colors.white)),
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            Container(
-              width: double.infinity, height: 52,
-              decoration: BoxDecoration(
-                  gradient: AppColors.brandGradient,
-                  borderRadius: BorderRadius.circular(14)),
-              child: Center(
-                child: Text('Send Invite',
-                    style: GoogleFonts.syne(
-                        fontSize: 16, fontWeight: FontWeight.w700,
-                        color: Colors.white)),
-              ),
-            ),
-            SizedBox(height: MediaQuery.of(context).viewInsets.bottom + 16),
-          ],
-        ),
+          );
+        }
       ),
     );
   }
 }
 
-class _RequestCard extends StatelessWidget {
+class _RequestCard extends ConsumerWidget {
   final MockFriend friend;
   const _RequestCard({required this.friend});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
@@ -304,7 +342,16 @@ class _RequestCard extends StatelessWidget {
             ),
           ),
           GestureDetector(
-            onTap: () {},
+            onTap: () async {
+              if (friend.id != null) {
+                final success = await ref.read(socialProvider.notifier).acceptRequest(friend.id!);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(success ? 'Request accepted!' : 'Failed to accept request')),
+                  );
+                }
+              }
+            },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
@@ -319,7 +366,16 @@ class _RequestCard extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           GestureDetector(
-            onTap: () {},
+            onTap: () async {
+              if (friend.id != null) {
+                final success = await ref.read(socialProvider.notifier).declineRequest(friend.id!);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(success ? 'Request declined' : 'Failed to decline request')),
+                  );
+                }
+              }
+            },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
