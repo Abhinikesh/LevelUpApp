@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -44,12 +45,12 @@ class AppRoutes {
 // ─────────────────────────────────────────────────────────────
 
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authProvider);
-
   return GoRouter(
     initialLocation: AppRoutes.splash,
     debugLogDiagnostics: true,
+    refreshListenable: GoRouterRefreshStream(ref.watch(authProvider.notifier).stream),
     redirect: (context, state) async {
+      final authState = ref.read(authProvider);
       final hasToken = await SecureStorageService.hasToken();
       final isAuthenticated = authState.isAuthenticated || hasToken;
       final location = state.matchedLocation;
@@ -233,5 +234,25 @@ class _ErrorPage extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Stream-based Listenable for GoRouter
+// ─────────────────────────────────────────────────────────────
+class GoRouterRefreshStream extends ChangeNotifier {
+  late final StreamSubscription<dynamic> _subscription;
+
+  GoRouterRefreshStream(Stream<dynamic> stream) {
+    notifyListeners();
+    _subscription = stream.asBroadcastStream().listen(
+          (dynamic _) => notifyListeners(),
+        );
+  }
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
   }
 }

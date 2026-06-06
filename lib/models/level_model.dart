@@ -1,5 +1,8 @@
 enum LevelState { completed, active, locked }
 
+/// Alias used by map_view_screen
+typedef LevelStatus = LevelState;
+
 enum ProofType { quiz, photo, code, voice, timer, screenshot, text }
 
 class LevelModel {
@@ -41,6 +44,21 @@ class LevelModel {
     if (isCompleted) return LevelState.completed;
     if (!isLocked) return LevelState.active;
     return LevelState.locked;
+  }
+
+  /// Alias for state — used by UI widgets
+  LevelState get status => state;
+
+  String get proofTypeLabel {
+    switch (proofType) {
+      case 'quiz': return 'Quiz';
+      case 'photo': return 'Photo Proof';
+      case 'code': return 'Code Review';
+      case 'voice': return 'Voice Explain';
+      case 'timer': return 'Timed Task';
+      case 'screenshot': return 'Screenshot';
+      default: return 'Written';
+    }
   }
 
   ProofType get proofTypeEnum {

@@ -1,194 +1,231 @@
-import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/api_constants.dart';
-import '../../core/network/api_interceptors.dart';
 import '../../core/network/dio_client.dart';
-import '../../core/storage/local_database.dart';
 import '../../models/level_model.dart';
 
 // ─────────────────────────────────────────────────────────────
-// State  (renamed LevelsState to avoid clash with LevelState enum)
+// State
 // ─────────────────────────────────────────────────────────────
 
-class LevelsState {
+class LevelState {
   final List<LevelModel> levels;
   final bool isLoading;
   final String? error;
   final bool hasLoaded;
 
-  const LevelsState({
+  const LevelState({
     this.levels = const [],
     this.isLoading = false,
     this.error,
     this.hasLoaded = false,
   });
 
-  LevelsState copyWith({
+  LevelState copyWith({
     List<LevelModel>? levels,
     bool? isLoading,
     String? error,
     bool? hasLoaded,
-  }) {
-    return LevelsState(
-      levels: levels ?? this.levels,
-      isLoading: isLoading ?? this.isLoading,
-      error: error,
-      hasLoaded: hasLoaded ?? this.hasLoaded,
-    );
-  }
+  }) =>
+      LevelState(
+        levels: levels ?? this.levels,
+        isLoading: isLoading ?? this.isLoading,
+        error: error,
+        hasLoaded: hasLoaded ?? this.hasLoaded,
+      );
 }
 
 // ─────────────────────────────────────────────────────────────
-// Notifier  (family — keyed by roadmapId)
+// Mock level generator
 // ─────────────────────────────────────────────────────────────
 
-class LevelNotifier extends StateNotifier<LevelsState> {
-  final Dio _dio;
+List<LevelModel> _mockLevels(String roadmapId) {
+  const _dsaTitles = [
+    'Arrays & Slicing', 'Two Pointers', 'Sliding Window', 'Binary Search',
+    'Linked Lists', 'Stacks & Queues', 'Trees — Basics', 'BFS & DFS',
+    'Heaps & Priority Queues', 'Tries', 'Dynamic Programming I',
+    'DP — Subsequences', 'DP — Knapsack', 'Graphs Intro', 'Dijkstra',
+    'Bellman-Ford', 'Floyd-Warshall', 'Backtracking', 'Greedy Algorithms',
+    'Bit Manipulation', 'Sorting Deep Dive', 'Hashing', 'Union-Find',
+    'Segment Trees', 'Monotonic Stack', 'Matrix Problems', 'Intervals',
+    'Math & Number Theory', 'String Algorithms', 'Final Challenge',
+  ];
+  const _gymTitles = [
+    'Mobility Warmup', 'Push Day I', 'Pull Day I', 'Leg Day I',
+    'Core & Abs', 'Push Day II', 'Pull Day II', 'Leg Day II',
+    'Cardio HIIT', 'Strength Test', 'Upper Body Superset',
+    'Lower Body Superset', 'Full Body Circuit', 'Active Recovery',
+    'Push Day III', 'Pull Day III', 'Leg Day III', 'Core Strength',
+    'Power Training', 'Endurance Run', 'Push Day IV', 'Pull Day IV',
+    'Leg Day IV', 'Mobility & Stretch', 'Upper Hypertrophy',
+    'Lower Hypertrophy', 'Full Body Power', 'Deload Week',
+    'Max Strength Test', 'Final Fitness Check', 'Recovery Protocol',
+    'Functional Strength', 'Sprint Training', 'Olympic Lifting Intro',
+    'Plyometrics', 'Yoga & Flexibility', 'HIIT Cardio II',
+    'Peak Week Prep', 'Transformation Test', 'Graduation Day',
+    'Celebration Workout', 'Recovery & Reflection',
+  ];
+  const _systemTitles = [
+    'Scalability Basics', 'Load Balancing', 'Caching Strategies',
+    'SQL vs NoSQL', 'CAP Theorem', 'Consistent Hashing',
+    'Message Queues', 'API Design', 'Rate Limiting',
+    'Authentication Systems', 'Microservices', 'Event Sourcing',
+    'Service Mesh', 'CDN & Edge', 'Database Sharding',
+    'Distributed Locks', 'Search Systems', 'Stream Processing',
+    'Observability', 'Final Design Review',
+  ];
+
+  final titles = roadmapId.contains('001')
+      ? _dsaTitles
+      : roadmapId.contains('002')
+          ? _gymTitles
+          : _systemTitles;
+
+  const proofTypes = ['quiz', 'voice', 'quiz', 'photo', 'quiz'];
+  final completedCount = roadmapId.contains('001')
+      ? 7
+      : roadmapId.contains('002')
+          ? 11
+          : 2;
+
+  return List.generate(titles.length, (i) {
+    final num = i + 1;
+    final isCompleted = i < completedCount;
+    final isActive = i == completedCount;
+    return LevelModel(
+      id: '$roadmapId-level-$num',
+      roadmapId: roadmapId,
+      levelNumber: num,
+      title: i < titles.length ? titles[i] : 'Level $num',
+      description:
+          'Master the concepts in this level to unlock the next challenge. '
+          'Apply your knowledge through hands-on practice.',
+      proofType: proofTypes[i % proofTypes.length],
+      estimatedMinutes: 20 + (i % 4) * 10,
+      isLocked: !isCompleted && !isActive,
+      isCompleted: isCompleted,
+      xpReward: 100 + (i % 3) * 50,
+      completedAt: isCompleted
+          ? DateTime.now().subtract(Duration(days: completedCount - i))
+          : null,
+      topics: ['Concept ${i + 1}A', 'Concept ${i + 1}B', 'Practice ${i + 1}'],
+    );
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// Notifier
+// ─────────────────────────────────────────────────────────────
+
+class LevelNotifier extends StateNotifier<LevelState> {
   final String roadmapId;
 
-  LevelNotifier(this._dio, this.roadmapId) : super(const LevelsState()) {
-    fetchLevels();
-  }
+  LevelNotifier(this.roadmapId) : super(const LevelState());
+
+  bool get _isMockMode =>
+      ApiConstants.baseUrl.contains('your-backend') ||
+      ApiConstants.baseUrl.isEmpty ||
+      kDebugMode;
 
   Future<void> fetchLevels({bool forceRefresh = false}) async {
     if (state.isLoading) return;
+    if (state.hasLoaded && !forceRefresh) return;
 
-    // Load from SQLite cache first for instant display
-    if (!forceRefresh && !state.hasLoaded) {
-      final cached = await LocalDatabase.getLevels(roadmapId);
-      if (cached.isNotEmpty) {
-        state = state.copyWith(levels: cached, hasLoaded: true);
-      }
-    }
+    state = state.copyWith(isLoading: true);
 
-    state = state.copyWith(isLoading: true, error: null);
-    try {
-      final response = await _dio.get(ApiConstants.roadmapLevels(roadmapId));
-      final data = response.data;
-
-      List<dynamic> list;
-      if (data is List) {
-        list = data;
-      } else if (data is Map<String, dynamic>) {
-        list = data['levels'] as List<dynamic>? ??
-            data['data'] as List<dynamic>? ??
-            [];
-      } else {
-        list = [];
-      }
-
-      final levels = list
-          .map((j) => LevelModel.fromJson(j as Map<String, dynamic>))
-          .toList()
-        ..sort((a, b) => a.levelNumber.compareTo(b.levelNumber));
-
-      await LocalDatabase.saveLevels(levels);
-      state = state.copyWith(levels: levels, isLoading: false, hasLoaded: true);
-    } on DioException catch (e) {
-      final ex = ApiException.fromDioError(e);
-      state = state.copyWith(isLoading: false, error: ex.message);
-    } catch (_) {
-      state = state.copyWith(isLoading: false, error: 'Failed to load levels.');
-    }
-  }
-
-  Future<bool> completeLevel(
-    String levelId, {
-    Map<String, dynamic>? verificationPayload,
-  }) async {
-    state = state.copyWith(isLoading: true, error: null);
-    try {
-      final response = await _dio.post(
-        ApiConstants.completeLevel(levelId),
-        data: verificationPayload,
+    if (_isMockMode) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      state = state.copyWith(
+        levels: _mockLevels(roadmapId),
+        isLoading: false,
+        hasLoaded: true,
       );
+      return;
+    }
+
+    try {
+      final dio = DioClient.instance;
+      final response =
+          await dio.get(ApiConstants.roadmapLevels(roadmapId));
       final data = response.data as Map<String, dynamic>;
-      final updatedLevelData = data['level'] as Map<String, dynamic>?;
-      final nextLevelData = data['nextLevel'] as Map<String, dynamic>?;
+      final list = (data['levels'] as List<dynamic>? ?? [])
+          .map((e) => LevelModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+      state = state.copyWith(levels: list, isLoading: false, hasLoaded: true);
+    } catch (e) {
+      state = state.copyWith(
+          isLoading: false, error: 'Failed to load levels. Try again.');
+    }
+  }
 
-      final updatedLevels = state.levels.map((l) {
-        if (l.id == levelId) {
-          return updatedLevelData != null
-              ? LevelModel.fromJson(updatedLevelData)
-              : l.copyWith(isCompleted: true, completedAt: DateTime.now());
-        }
-        if (nextLevelData != null) {
-          final next = LevelModel.fromJson(nextLevelData);
-          if (l.id == next.id) return next;
-        }
-        return l;
-      }).toList();
-
-      await LocalDatabase.saveLevels(updatedLevels);
-      state = state.copyWith(levels: updatedLevels, isLoading: false);
-      return true;
-    } on DioException catch (e) {
-      final ex = ApiException.fromDioError(e);
-      if (ex.statusCode == null) {
-        // Offline: optimistic update + queue
-        await LocalDatabase.addPendingAction('completeLevel', {
-          'levelId': levelId,
-          'roadmapId': roadmapId,
-          'verificationPayload': verificationPayload,
-        });
-        final updated = state.levels.map((l) {
-          return l.id == levelId
-              ? l.copyWith(isCompleted: true, completedAt: DateTime.now())
-              : l;
-        }).toList();
-        state = state.copyWith(levels: updated, isLoading: false);
-        return true;
+  /// Mark a level as complete locally (optimistic update)
+  void markComplete(String levelId) {
+    final updated = state.levels.map((l) {
+      if (l.id == levelId) {
+        return l.copyWith(isCompleted: true, isLocked: false,
+            completedAt: DateTime.now());
       }
-      state = state.copyWith(isLoading: false, error: ex.message);
-      return false;
-    } catch (_) {
-      state = state.copyWith(isLoading: false, error: 'Failed to complete level.');
-      return false;
-    }
+      // Unlock next level
+      if (l.levelNumber == _levelNumberFor(levelId) + 1) {
+        return l.copyWith(isLocked: false);
+      }
+      return l;
+    }).toList();
+    state = state.copyWith(levels: updated);
   }
 
-  LevelModel? getActiveLevel() {
+  int _levelNumberFor(String levelId) {
     try {
-      return state.levels.firstWhere((l) => l.state == LevelState.active);
+      return state.levels.firstWhere((l) => l.id == levelId).levelNumber;
     } catch (_) {
-      return null;
+      return 0;
     }
   }
-
-  LevelModel? getLevelById(String id) {
-    try {
-      return state.levels.firstWhere((l) => l.id == id);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  void clearError() => state = state.copyWith(error: null);
 }
 
 // ─────────────────────────────────────────────────────────────
-// Providers
+// Provider
 // ─────────────────────────────────────────────────────────────
 
-final levelProvider =
-    StateNotifierProvider.family<LevelNotifier, LevelsState, String>(
-  (ref, roadmapId) => LevelNotifier(DioClient.instance, roadmapId),
+final levelProvider = StateNotifierProvider.family<LevelNotifier, LevelState, String>(
+  (ref, roadmapId) => LevelNotifier(roadmapId),
 );
 
+/// Get a single level by ID across all loaded roadmaps
+final levelByIdProvider = Provider.family<LevelModel?, String>((ref, levelId) {
+  // Search all level providers — we look in mock data since roadmapId is embedded
+  const roadmapIds = [
+    'mock-roadmap-001',
+    'mock-roadmap-002',
+    'mock-roadmap-003',
+  ];
+  for (final rId in roadmapIds) {
+    final s = ref.watch(levelProvider(rId));
+    try {
+      return s.levels.firstWhere((l) => l.id == levelId);
+    } catch (_) {
+      // not in this roadmap
+    }
+  }
+  // fallback: parse from levelId pattern
+  if (levelId.contains('-level-')) {
+    final parts = levelId.split('-level-');
+    final rId = parts[0];
+    final num = int.tryParse(parts[1]) ?? 1;
+    return _mockLevels(rId).firstWhere(
+      (l) => l.levelNumber == num,
+      orElse: () => _mockLevels(rId).first,
+    );
+  }
+  return null;
+});
+
+/// Active level for a roadmap
 final activeLevelProvider = Provider.family<LevelModel?, String>((ref, roadmapId) {
   final levels = ref.watch(levelProvider(roadmapId)).levels;
   try {
-    return levels.firstWhere((l) => l.state == LevelState.active);
+    return levels.firstWhere((l) => l.status == LevelStatus.active);
   } catch (_) {
     return null;
   }
-});
-
-final completedLevelsCountProvider =
-    Provider.family<int, String>((ref, roadmapId) {
-  return ref
-      .watch(levelProvider(roadmapId))
-      .levels
-      .where((l) => l.isCompleted)
-      .length;
 });
