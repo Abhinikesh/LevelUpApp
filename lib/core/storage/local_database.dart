@@ -1,280 +1,201 @@
 import 'dart:convert';
-import 'package:path/path.dart';
-import 'package:sqflite/sqflite.dart';
+
+
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/roadmap_model.dart';
 import '../../models/level_model.dart';
 
-/// SQLite local database for offline caching and pending actions.
+/// Web-only in-memory + SharedPreferences cache.
+/// Mirrors the LocalDatabase API so providers stay unchanged.
 class LocalDatabase {
   LocalDatabase._();
 
-  static Database? _db;
+  static SharedPreferences? _prefs;
 
-  static Future<Database> get database async {
-    _db ??= await _initDb();
-    return _db!;
-  }
-
-  // ── Init ──────────────────────────────────────────────────────
-
-  static Future<Database> _initDb() async {
-    final dbPath = await getDatabasesPath();
-    final path = join(dbPath, 'stepup.db');
-
-    return openDatabase(
-      path,
-      version: 1,
-      onCreate: _onCreate,
-      onUpgrade: _onUpgrade,
-    );
-  }
-
-  static Future<void> _onCreate(Database db, int version) async {
-    await db.execute('''
-      CREATE TABLE roadmaps (
-        id TEXT PRIMARY KEY,
-        data TEXT NOT NULL,
-        lastSync INTEGER NOT NULL
-      )
-    ''');
-
-    await db.execute('''
-      CREATE TABLE levels (
-        id TEXT PRIMARY KEY,
-        roadmapId TEXT NOT NULL,
-        data TEXT NOT NULL,
-        lastSync INTEGER NOT NULL
-      )
-    ''');
-
-    await db.execute('''
-      CREATE TABLE pending_actions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        actionType TEXT NOT NULL,
-        payload TEXT NOT NULL,
-        createdAt INTEGER NOT NULL
-      )
-    ''');
-
-    await db.execute('''
-      CREATE TABLE user_cache (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL,
-        updatedAt INTEGER NOT NULL
-      )
-    ''');
-
-    // Indexes for faster queries
-    await db.execute(
-      'CREATE INDEX idx_levels_roadmapId ON levels (roadmapId)',
-    );
-    await db.execute(
-      'CREATE INDEX idx_pending_createdAt ON pending_actions (createdAt)',
-    );
-  }
-
-  static Future<void> _onUpgrade(
-    Database db,
-    int oldVersion,
-    int newVersion,
-  ) async {
-    // Future migrations go here
+  static Future<SharedPreferences> get _p async {
+    _prefs ??= await SharedPreferences.getInstance();
+    return _prefs!;
   }
 
   // ── Roadmaps ──────────────────────────────────────────────────
 
   static Future<void> saveRoadmap(RoadmapModel roadmap) async {
-    final db = await database;
-    await db.insert(
-      'roadmaps',
-      {
-        'id': roadmap.id,
-        'data': jsonEncode(roadmap.toJson()),
-        'lastSync': DateTime.now().millisecondsSinceEpoch,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    final p = await _p;
+    final list = p.getStringList('roadmaps') ?? [];
+    final json = jsonEncode(roadmap.toJson());
+    // Replace or add
+    final idx = list.indexWhere((s) {
+      try {
+        return (jsonDecode(s) as Map)['_id'] == roadmap.id ||
+            (jsonDecode(s) as Map)['id'] == roadmap.id;
+      } catch (_) {
+        return false;
+      }
+    });
+    if (idx >= 0) {
+      list[idx] = json;
+    } else {
+      list.add(json);
+    }
+    await p.setStringList('roadmaps', list);
   }
 
   static Future<RoadmapModel?> getRoadmap(String id) async {
-    final db = await database;
-    final rows = await db.query(
-      'roadmaps',
-      where: 'id = ?',
-      whereArgs: [id],
-      limit: 1,
-    );
-    if (rows.isEmpty) return null;
-    return RoadmapModel.fromJson(
-      jsonDecode(rows.first['data'] as String) as Map<String, dynamic>,
-    );
+    final all = await getAllRoadmaps();
+    try {
+      return all.firstWhere((r) => r.id == id);
+    } catch (_) {
+      return null;
+    }
   }
 
   static Future<List<RoadmapModel>> getAllRoadmaps() async {
-    final db = await database;
-    final rows = await db.query('roadmaps', orderBy: 'lastSync DESC');
-    return rows
-        .map(
-          (r) => RoadmapModel.fromJson(
-            jsonDecode(r['data'] as String) as Map<String, dynamic>,
-          ),
-        )
-        .toList();
+    final p = await _p;
+    final list = p.getStringList('roadmaps') ?? [];
+    return list.map((s) {
+      try {
+        return RoadmapModel.fromJson(
+            jsonDecode(s) as Map<String, dynamic>);
+      } catch (_) {
+        return null;
+      }
+    }).whereType<RoadmapModel>().toList();
   }
 
   static Future<void> deleteRoadmap(String id) async {
-    final db = await database;
-    await db.delete('roadmaps', where: 'id = ?', whereArgs: [id]);
-    await db.delete('levels', where: 'roadmapId = ?', whereArgs: [id]);
+    final p = await _p;
+    final list = p.getStringList('roadmaps') ?? [];
+    list.removeWhere((s) {
+      try {
+        final m = jsonDecode(s) as Map;
+        return m['_id'] == id || m['id'] == id;
+      } catch (_) {
+        return false;
+      }
+    });
+    await p.setStringList('roadmaps', list);
   }
 
   // ── Levels ────────────────────────────────────────────────────
 
   static Future<void> saveLevels(List<LevelModel> levels) async {
-    final db = await database;
-    final batch = db.batch();
-    final now = DateTime.now().millisecondsSinceEpoch;
+    final p = await _p;
+    final list = p.getStringList('levels') ?? [];
     for (final level in levels) {
-      batch.insert(
-        'levels',
-        {
-          'id': level.id,
-          'roadmapId': level.roadmapId,
-          'data': jsonEncode(level.toJson()),
-          'lastSync': now,
-        },
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
+      final json = jsonEncode(level.toJson());
+      final idx = list.indexWhere((s) {
+        try {
+          return (jsonDecode(s) as Map)['_id'] == level.id ||
+              (jsonDecode(s) as Map)['id'] == level.id;
+        } catch (_) {
+          return false;
+        }
+      });
+      if (idx >= 0) {
+        list[idx] = json;
+      } else {
+        list.add(json);
+      }
     }
-    await batch.commit(noResult: true);
+    await p.setStringList('levels', list);
   }
 
   static Future<List<LevelModel>> getLevels(String roadmapId) async {
-    final db = await database;
-    final rows = await db.query(
-      'levels',
-      where: 'roadmapId = ?',
-      whereArgs: [roadmapId],
-      orderBy: "json_extract(data, '\$.levelNumber') ASC",
-    );
-    return rows
-        .map(
-          (r) => LevelModel.fromJson(
-            jsonDecode(r['data'] as String) as Map<String, dynamic>,
-          ),
-        )
-        .toList();
+    final p = await _p;
+    final list = p.getStringList('levels') ?? [];
+    return list.map((s) {
+      try {
+        return LevelModel.fromJson(
+            jsonDecode(s) as Map<String, dynamic>);
+      } catch (_) {
+        return null;
+      }
+    }).whereType<LevelModel>().where((l) => l.roadmapId == roadmapId).toList();
   }
 
   static Future<LevelModel?> getLevel(String id) async {
-    final db = await database;
-    final rows = await db.query(
-      'levels',
-      where: 'id = ?',
-      whereArgs: [id],
-      limit: 1,
-    );
-    if (rows.isEmpty) return null;
-    return LevelModel.fromJson(
-      jsonDecode(rows.first['data'] as String) as Map<String, dynamic>,
-    );
+    final levels = await getLevels('');
+    try {
+      return levels.firstWhere((l) => l.id == id);
+    } catch (_) {
+      return null;
+    }
   }
 
-  // ── Pending Actions ──────────────────────────────────────────
+  // ── Pending Actions ───────────────────────────────────────────
 
   static Future<int> addPendingAction(
-    String actionType,
-    Map<String, dynamic> payload,
-  ) async {
-    final db = await database;
-    return db.insert('pending_actions', {
-      'actionType': actionType,
-      'payload': jsonEncode(payload),
-      'createdAt': DateTime.now().millisecondsSinceEpoch,
-    });
+      String actionType, Map<String, dynamic> payload) async {
+    final p = await _p;
+    final list = p.getStringList('pending_actions') ?? [];
+    list.add(jsonEncode({'actionType': actionType, 'payload': payload}));
+    await p.setStringList('pending_actions', list);
+    return list.length;
   }
 
   static Future<List<Map<String, dynamic>>> getPendingActions() async {
-    final db = await database;
-    final rows = await db.query(
-      'pending_actions',
-      orderBy: 'createdAt ASC',
-    );
-    return rows.map((r) {
-      return {
-        'id': r['id'] as int,
-        'actionType': r['actionType'] as String,
-        'payload': jsonDecode(r['payload'] as String) as Map<String, dynamic>,
-        'createdAt': DateTime.fromMillisecondsSinceEpoch(
-          r['createdAt'] as int,
-        ),
-      };
-    }).toList();
+    final p = await _p;
+    final list = p.getStringList('pending_actions') ?? [];
+    return list.map((s) {
+      try {
+        return jsonDecode(s) as Map<String, dynamic>;
+      } catch (_) {
+        return <String, dynamic>{};
+      }
+    }).where((m) => m.isNotEmpty).toList();
   }
 
   static Future<void> deletePendingAction(int id) async {
-    final db = await database;
-    await db.delete(
-      'pending_actions',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    final p = await _p;
+    final list = p.getStringList('pending_actions') ?? [];
+    if (id < list.length) list.removeAt(id);
+    await p.setStringList('pending_actions', list);
   }
 
   static Future<void> clearPendingActions() async {
-    final db = await database;
-    await db.delete('pending_actions');
+    final p = await _p;
+    await p.remove('pending_actions');
   }
 
   // ── User Cache ────────────────────────────────────────────────
 
   static Future<void> saveUserCache(String key, String value) async {
-    final db = await database;
-    await db.insert(
-      'user_cache',
-      {
-        'key': key,
-        'value': value,
-        'updatedAt': DateTime.now().millisecondsSinceEpoch,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    final p = await _p;
+    await p.setString('uc_$key', value);
   }
 
   static Future<String?> getUserCache(String key) async {
-    final db = await database;
-    final rows = await db.query(
-      'user_cache',
-      where: 'key = ?',
-      whereArgs: [key],
-      limit: 1,
-    );
-    if (rows.isEmpty) return null;
-    return rows.first['value'] as String?;
+    final p = await _p;
+    return p.getString('uc_$key');
   }
 
   static Future<void> deleteUserCache(String key) async {
-    final db = await database;
-    await db.delete('user_cache', where: 'key = ?', whereArgs: [key]);
+    final p = await _p;
+    await p.remove('uc_$key');
   }
 
   static Future<void> clearUserCache() async {
-    final db = await database;
-    await db.delete('user_cache');
+    final p = await _p;
+    final keys = p.getKeys().where((k) => k.startsWith('uc_')).toList();
+    for (final k in keys) {
+      await p.remove(k);
+    }
   }
 
-  // ── Maintenance ──────────────────────────────────────────────
+  // ── Maintenance ───────────────────────────────────────────────
 
   static Future<void> clearAll() async {
-    final db = await database;
-    await db.delete('roadmaps');
-    await db.delete('levels');
-    await db.delete('pending_actions');
-    await db.delete('user_cache');
+    final p = await _p;
+    await p.remove('roadmaps');
+    await p.remove('levels');
+    await p.remove('pending_actions');
+    final ucKeys = p.getKeys().where((k) => k.startsWith('uc_')).toList();
+    for (final k in ucKeys) {
+      await p.remove(k);
+    }
   }
 
   static Future<void> close() async {
-    await _db?.close();
-    _db = null;
+    // No-op for SharedPreferences
   }
 }

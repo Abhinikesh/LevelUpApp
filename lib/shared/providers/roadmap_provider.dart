@@ -1,10 +1,57 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/network/api_interceptors.dart';
 import '../../core/network/dio_client.dart';
 import '../../core/storage/local_database.dart';
 import '../../models/roadmap_model.dart';
+
+// ─── Mock roadmaps for demo/debug mode ───────────────────────
+final _mockRoadmaps = [
+  RoadmapModel(
+    id: 'mock-roadmap-001',
+    userId: 'mock-user-001',
+    title: 'Data Structures & Algorithms',
+    description: 'Master DSA from scratch — arrays, trees, graphs, DP and more.',
+    type: 'study',
+    source: 'ai',
+    totalLevels: 30,
+    currentLevel: 8,
+    createdAt: DateTime.now().subtract(const Duration(days: 14)),
+    coverEmoji: '🧠',
+    totalXpReward: 4500,
+    xpEarned: 1200,
+  ),
+  RoadmapModel(
+    id: 'mock-roadmap-002',
+    userId: 'mock-user-001',
+    title: '6-Week Gym Transformation',
+    description: 'Full body strength program — 5 days a week, progressive overload.',
+    type: 'gym',
+    source: 'manual',
+    totalLevels: 42,
+    currentLevel: 12,
+    createdAt: DateTime.now().subtract(const Duration(days: 30)),
+    coverEmoji: '💪',
+    totalXpReward: 6300,
+    xpEarned: 1800,
+  ),
+  RoadmapModel(
+    id: 'mock-roadmap-003',
+    userId: 'mock-user-001',
+    title: 'System Design Mastery',
+    description: 'Learn to design scalable distributed systems for FAANG interviews.',
+    type: 'work',
+    source: 'ai',
+    totalLevels: 20,
+    currentLevel: 3,
+    createdAt: DateTime.now().subtract(const Duration(days: 5)),
+    coverEmoji: '🏗️',
+    totalXpReward: 3000,
+    xpEarned: 450,
+  ),
+];
 
 // ─────────────────────────────────────────────────────────────
 // State
@@ -47,10 +94,29 @@ class RoadmapNotifier extends StateNotifier<RoadmapState> {
 
   RoadmapNotifier(this._dio) : super(const RoadmapState());
 
+  bool get _isMockMode =>
+      ApiConstants.baseUrl.contains('your-backend') ||
+      ApiConstants.baseUrl.isEmpty ||
+      kDebugMode;
+
   // ── Fetch all roadmaps ────────────────────────────────────────
 
   Future<void> fetchRoadmaps({bool forceRefresh = false}) async {
     if (state.isLoading) return;
+
+    // ── Demo / mock mode ────────────────────────────────────────
+    if (_isMockMode) {
+      if (!state.hasLoaded || forceRefresh) {
+        state = state.copyWith(isLoading: true);
+        await Future.delayed(const Duration(milliseconds: 600));
+        state = state.copyWith(
+          roadmaps: _mockRoadmaps,
+          isLoading: false,
+          hasLoaded: true,
+        );
+      }
+      return;
+    }
 
     // Load from local cache first for instant display
     if (!forceRefresh && !state.hasLoaded) {

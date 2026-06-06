@@ -473,7 +473,8 @@ class _VerificationIllustration extends StatelessWidget {
 
           // Stars flying out
           ...List.generate(4, (i) {
-            final angle = (i / 4) * 2 * 3.14159;
+
+
             return Positioned(
               top: 20 + 70 * (0.3 + 0.4 * (i % 2)),
               right: 10 + 40.0 * i,

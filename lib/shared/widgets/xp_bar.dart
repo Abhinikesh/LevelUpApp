@@ -72,7 +72,7 @@ class XpBar extends StatelessWidget {
                         BorderRadius.circular(height / 2),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.brand.withOpacity(0.4),
+                        color: AppColors.brand.withValues(alpha: 0.4),
                         blurRadius: 6,
                         spreadRadius: 0,
                       ),

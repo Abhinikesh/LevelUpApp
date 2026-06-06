@@ -75,7 +75,7 @@ class StreakBadge extends StatelessWidget {
         boxShadow: streak > 0
             ? [
                 BoxShadow(
-                  color: const Color(0xFFFF8C00).withOpacity(0.4),
+                  color: const Color(0xFFFF8C00).withValues(alpha: 0.4),
                   blurRadius: 12,
                   spreadRadius: 1,
                 ),
@@ -110,7 +110,7 @@ class StreakBadge extends StatelessWidget {
                 boxShadow: [
                   BoxShadow(
                     color: const Color(0xFFFF8C00)
-                        .withOpacity(0.15 + 0.25 * value),
+                        .withValues(alpha: 0.15 + 0.25 * value),
                     blurRadius: 8 + 12 * value,
                     spreadRadius: value * 2,
                   ),
