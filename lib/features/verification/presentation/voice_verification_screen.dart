@@ -80,7 +80,14 @@ class _VoiceVerificationScreenState
       _confetti.play();
       ref
           .read(levelProvider(widget.levelId.split('-level-').first).notifier)
-          .markComplete(widget.levelId);
+          .verifyAndCompleteLevel(
+            levelId: widget.levelId,
+            proofType: 'voice',
+            proofData: {
+              'transcript': 'Mock voice response explaining the concepts.',
+              'passed': passed,
+            },
+          );
     }
   }
 

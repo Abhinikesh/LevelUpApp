@@ -54,7 +54,11 @@ class _PhotoVerificationScreenState
       _confetti.play();
       ref
           .read(levelProvider(widget.levelId.split('-level-').first).notifier)
-          .markComplete(widget.levelId);
+          .verifyAndCompleteLevel(
+            levelId: widget.levelId,
+            proofType: 'photo',
+            proofUrl: 'mock_uploaded_photo.jpg',
+          );
     }
   }
 

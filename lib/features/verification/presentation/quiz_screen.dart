@@ -159,7 +159,14 @@ class _QuizScreenState extends ConsumerState<QuizScreen>
     if (correct >= (_q.length * 0.8).ceil()) {
       _confetti.play();
       ref.read(levelProvider(widget.levelId.split('-level-').first).notifier)
-          .markComplete(widget.levelId);
+          .verifyAndCompleteLevel(
+            levelId: widget.levelId,
+            proofType: 'quiz',
+            proofData: {
+              'score': correct,
+              'total': _q.length,
+            },
+          );
     }
   }
 

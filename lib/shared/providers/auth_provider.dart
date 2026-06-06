@@ -81,11 +81,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  // ── Backend reachable check ───────────────────────────────────
-
   bool get _isPlaceholderBackend =>
       ApiConstants.baseUrl.contains('your-backend') ||
-      ApiConstants.baseUrl.contains('localhost') ||
       ApiConstants.baseUrl.isEmpty;
 
   // ── Login ─────────────────────────────────────────────────────
@@ -94,7 +91,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(isLoading: true, error: null);
 
     // ── Demo / mock mode (no real backend configured) ─────────
-    if (_isPlaceholderBackend || kDebugMode) {
+    if (_isPlaceholderBackend) {
       await Future.delayed(const Duration(milliseconds: 900)); // fake latency
       final mock = _mockUser(
         name: _nameFromEmail(email),
@@ -156,7 +153,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(isLoading: true, error: null);
 
     // ── Demo / mock mode ──────────────────────────────────────
-    if (_isPlaceholderBackend || kDebugMode) {
+    if (_isPlaceholderBackend) {
       await Future.delayed(const Duration(milliseconds: 1100));
       final mock = _mockUser(name: name, email: email);
       await SecureStorageService.saveToken('mock-jwt-token-${mock.id}');
@@ -209,7 +206,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> getMe() async {
     // In mock mode, rehydrate from stored token
-    if (_isPlaceholderBackend || kDebugMode) {
+    if (_isPlaceholderBackend) {
       final token = await SecureStorageService.getToken();
       if (token != null && token.isNotEmpty) {
         state = state.copyWith(

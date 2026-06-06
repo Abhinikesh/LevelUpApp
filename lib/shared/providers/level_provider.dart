@@ -124,8 +124,7 @@ class LevelNotifier extends StateNotifier<LevelState> {
 
   bool get _isMockMode =>
       ApiConstants.baseUrl.contains('your-backend') ||
-      ApiConstants.baseUrl.isEmpty ||
-      kDebugMode;
+      ApiConstants.baseUrl.isEmpty;
 
   Future<void> fetchLevels({bool forceRefresh = false}) async {
     if (state.isLoading) return;
@@ -172,6 +171,38 @@ class LevelNotifier extends StateNotifier<LevelState> {
       return l;
     }).toList();
     state = state.copyWith(levels: updated);
+  }
+
+  Future<bool> verifyAndCompleteLevel({
+    required String levelId,
+    required String proofType,
+    String proofUrl = '',
+    Map<String, dynamic>? proofData,
+    int timeSpentMinutes = 0,
+  }) async {
+    // Optimistic update
+    markComplete(levelId);
+
+    if (_isMockMode) {
+      return true;
+    }
+
+    try {
+      final dio = DioClient.instance;
+      final response = await dio.post(
+        ApiConstants.completeLevel(levelId),
+        data: {
+          'proofType': proofType,
+          'proofUrl': proofUrl,
+          'proofData': proofData,
+          'timeSpentMinutes': timeSpentMinutes,
+        },
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('[LevelNotifier] verifyAndCompleteLevel failed: $e');
+      return false;
+    }
   }
 
   int _levelNumberFor(String levelId) {

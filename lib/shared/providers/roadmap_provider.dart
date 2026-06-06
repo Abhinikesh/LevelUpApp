@@ -96,8 +96,7 @@ class RoadmapNotifier extends StateNotifier<RoadmapState> {
 
   bool get _isMockMode =>
       ApiConstants.baseUrl.contains('your-backend') ||
-      ApiConstants.baseUrl.isEmpty ||
-      kDebugMode;
+      ApiConstants.baseUrl.isEmpty;
 
   // ── Fetch all roadmaps ────────────────────────────────────────
 
