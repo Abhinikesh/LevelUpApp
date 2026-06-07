@@ -18,7 +18,7 @@ import '../../features/verification/presentation/verification_screen.dart';
 import '../../features/ai_coach/presentation/ai_coach_screen.dart';
 import '../../features/profile/presentation/settings_screen.dart';
 import '../../shared/providers/auth_provider.dart';
-import '../storage/secure_storage.dart';
+import '../storage/token_storage.dart';
 
 // ─────────────────────────────────────────────────────────────
 // Route name constants
@@ -52,8 +52,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     refreshListenable: GoRouterRefreshStream(ref.watch(authProvider.notifier).stream),
     redirect: (context, state) async {
       final authState = ref.read(authProvider);
-      final hasToken = await SecureStorageService.hasToken();
-      final isAuthenticated = authState.isAuthenticated || hasToken;
+      final token = await TokenStorage.getToken();
+      final isAuthenticated = authState.isAuthenticated || (token != null && token.isNotEmpty);
       final location = state.matchedLocation;
 
       final isAuthRoute = location == AppRoutes.login ||

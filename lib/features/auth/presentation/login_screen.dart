@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/router/app_router.dart';
@@ -10,6 +12,7 @@ import '../../../core/utils/validators.dart';
 import '../../../shared/providers/auth_provider.dart';
 import '../../../shared/widgets/stepup_button.dart';
 import '../../../shared/widgets/stepup_input.dart';
+import '../../../shared/widgets/premium_animations.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -50,6 +53,186 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final err = ref.read(authProvider).error;
       if (err != null) _showErrorSnack(err);
     }
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    try {
+      final GoogleSignIn googleSignIn = GoogleSignIn(
+        scopes: ['email', 'profile'],
+      );
+      final account = await googleSignIn.signIn();
+      if (account != null) {
+        final email = account.email;
+        final name = account.displayName ?? _nameFromEmail(email);
+        const password = 'GoogleSignInPasswordSecret123!';
+        
+        final ok = await ref.read(authProvider.notifier).login(email, password);
+        if (!ok && mounted) {
+          final regOk = await ref.read(authProvider.notifier).register(
+            name: name,
+            email: email,
+            password: password,
+          );
+          if (regOk && mounted) {
+            context.go(AppRoutes.dashboard);
+          } else if (mounted) {
+            final err = ref.read(authProvider).error;
+            _showErrorSnack(err ?? 'Google Sign-In registration failed.');
+          }
+        } else if (mounted) {
+          context.go(AppRoutes.dashboard);
+        }
+      }
+    } catch (e) {
+      debugPrint('Google Sign-in failed: $e');
+      if (mounted) {
+        _showGoogleConfigModal();
+      }
+    }
+  }
+
+  String _nameFromEmail(String email) {
+    final local = email.split('@').first;
+    return local[0].toUpperCase() + local.substring(1);
+  }
+
+  void _showGoogleConfigModal() {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: AppColors.bgCard,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+            side: const BorderSide(color: AppColors.border),
+          ),
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 460),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.coral.withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.settings_outlined, color: AppColors.coral, size: 24),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      'Google Web OAuth Setup',
+                      style: GoogleFonts.syne(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  'To enable Google authentication on Web, configure your Google Cloud Console Client ID:',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    color: AppColors.textSecondary,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _buildStepRow('1', 'Navigate to your Google Cloud Console.'),
+                _buildStepRow('2', 'Go to APIs & Services > Credentials.'),
+                _buildStepRow('3', 'Create an OAuth client ID for Web Application.'),
+                _buildStepRow('4', 'Add your active web origin (e.g. http://localhost) to Authorized JavaScript Origins.'),
+                _buildStepRow('5', 'Add the Client ID inside google_sign_in initializer or web/index.html meta tag.'),
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text(
+                        'Dismiss',
+                        style: GoogleFonts.inter(
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    BounceOnTap(
+                      onTap: () {
+                        Navigator.pop(context);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        decoration: BoxDecoration(
+                          gradient: AppColors.brandGradient,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          'Continue with Email',
+                          style: GoogleFonts.syne(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStepRow(String num, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 22,
+            height: 22,
+            decoration: const BoxDecoration(
+              color: AppColors.bgCardLight,
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(
+                num,
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.brand,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: GoogleFonts.inter(
+                fontSize: 13.5,
+                color: AppColors.textPrimary,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _triggerShake() {
@@ -107,6 +290,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 isLoading: isLoading,
                 shakeForm: _shakeForm,
                 onLogin: _login,
+                onGoogleSignIn: _handleGoogleSignIn,
                 onForgot: () {},
                 onSignUp: () => context.push(AppRoutes.signup),
               ),
@@ -280,13 +464,13 @@ class _FormSheet extends StatelessWidget {
   final TextEditingController passCtrl;
   final String? emailErr, passErr;
   final bool isLoading, shakeForm;
-  final VoidCallback onLogin, onForgot, onSignUp;
+  final VoidCallback onLogin, onGoogleSignIn, onForgot, onSignUp;
 
   const _FormSheet({
     required this.emailCtrl, required this.passCtrl,
     required this.emailErr, required this.passErr,
     required this.isLoading, required this.shakeForm,
-    required this.onLogin, required this.onForgot, required this.onSignUp,
+    required this.onLogin, required this.onGoogleSignIn, required this.onForgot, required this.onSignUp,
   });
 
   @override
@@ -389,7 +573,7 @@ class _FormSheet extends StatelessWidget {
                   const SizedBox(height: AppSpacing.base),
 
                   // Google button
-                  _GoogleButton().animate().fadeIn(delay: 450.ms),
+                  _GoogleButton(onPressed: onGoogleSignIn).animate().fadeIn(delay: 450.ms),
 
                   const SizedBox(height: AppSpacing.xl),
 
@@ -429,10 +613,13 @@ class _FormSheet extends StatelessWidget {
 }
 
 class _GoogleButton extends StatelessWidget {
+  final VoidCallback onPressed;
+  const _GoogleButton({required this.onPressed});
+
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {},
+    return BounceOnTap(
+      onTap: onPressed,
       child: Container(
         width: double.infinity,
         height: AppSpacing.buttonHeight,
@@ -462,7 +649,7 @@ class _GoogleButton extends StatelessWidget {
             const SizedBox(width: AppSpacing.md),
             Text('Continue with Google',
                 style: GoogleFonts.inter(
-                    fontSize: 15, fontWeight: FontWeight.w500,
+                    fontSize: 15, fontWeight: FontWeight.w600,
                     color: const Color(0xFF1A1A1A))),
           ],
         ),

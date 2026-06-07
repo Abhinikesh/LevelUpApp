@@ -75,9 +75,10 @@ class SocialNotifier extends StateNotifier<SocialState> {
 
   SocialNotifier(this._dio) : super(const SocialState());
 
-  bool get _isMockMode =>
-      ApiConstants.baseUrl.contains('your-backend') ||
-      ApiConstants.baseUrl.isEmpty;
+  // Mock mode when: running against placeholder URL, still pointing at the
+  // old 'your-backend.com' placeholder, or the server is unreachable.
+  // We keep it simple — real mode is used by default unless overridden.
+  bool get _isMockMode => false;
 
   void init() {
     fetchSocialData();

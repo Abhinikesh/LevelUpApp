@@ -92,6 +92,8 @@ class RoadmapState {
 class RoadmapNotifier extends StateNotifier<RoadmapState> {
   final Dio _dio;
 
+  Dio get dio => _dio;
+
   RoadmapNotifier(this._dio) : super(const RoadmapState());
 
   bool get _isMockMode =>

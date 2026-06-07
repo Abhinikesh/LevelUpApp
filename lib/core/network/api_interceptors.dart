@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../constants/api_constants.dart';
+import '../storage/token_storage.dart';
 
 // ─────────────────────────────────────────────────────────────
 // AUTH INTERCEPTOR
@@ -12,9 +13,6 @@ class AuthInterceptor extends Interceptor {
   final FlutterSecureStorage storage;
   bool _isRefreshing = false;
 
-  static const _tokenKey = 'jwt_token';
-  static const _refreshKey = 'refresh_token';
-
   AuthInterceptor({required this.dio, required this.storage});
 
   @override
@@ -22,7 +20,7 @@ class AuthInterceptor extends Interceptor {
     RequestOptions options,
     RequestInterceptorHandler handler,
   ) async {
-    final token = await storage.read(key: _tokenKey);
+    final token = await TokenStorage.getToken();
     if (token != null && token.isNotEmpty) {
       options.headers[ApiConstants.authHeader] =
           '${ApiConstants.tokenPrefix} $token';
@@ -41,7 +39,7 @@ class AuthInterceptor extends Interceptor {
         final refreshed = await _tryRefreshToken();
         if (refreshed) {
           // Retry original request with new token
-          final token = await storage.read(key: _tokenKey);
+          final token = await TokenStorage.getToken();
           final opts = err.requestOptions;
           opts.headers[ApiConstants.authHeader] =
               '${ApiConstants.tokenPrefix} $token';
@@ -56,7 +54,7 @@ class AuthInterceptor extends Interceptor {
       }
 
       // Clear credentials and signal logout
-      await storage.deleteAll();
+      await TokenStorage.clearAll();
       handler.next(err);
       return;
     }
@@ -64,20 +62,6 @@ class AuthInterceptor extends Interceptor {
   }
 
   Future<bool> _tryRefreshToken() async {
-    final refreshToken = await storage.read(key: _refreshKey);
-    if (refreshToken == null) return false;
-
-    try {
-      final response = await Dio().post(
-        '${ApiConstants.baseUrl}${ApiConstants.refreshToken}',
-        data: {'refreshToken': refreshToken},
-      );
-      final newToken = response.data['token'] as String?;
-      if (newToken != null) {
-        await storage.write(key: _tokenKey, value: newToken);
-        return true;
-      }
-    } catch (_) {}
     return false;
   }
 }

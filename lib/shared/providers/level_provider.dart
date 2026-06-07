@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/network/dio_client.dart';
 import '../../models/level_model.dart';
+import 'auth_provider.dart';
+import 'roadmap_provider.dart';
 
 // ─────────────────────────────────────────────────────────────
 // State
@@ -119,8 +121,9 @@ List<LevelModel> _mockLevels(String roadmapId) {
 
 class LevelNotifier extends StateNotifier<LevelState> {
   final String roadmapId;
+  final Ref ref;
 
-  LevelNotifier(this.roadmapId) : super(const LevelState());
+  LevelNotifier(this.roadmapId, this.ref) : super(const LevelState());
 
   bool get _isMockMode =>
       ApiConstants.baseUrl.contains('your-backend') ||
@@ -184,6 +187,16 @@ class LevelNotifier extends StateNotifier<LevelState> {
     markComplete(levelId);
 
     if (_isMockMode) {
+      // Mock mode: update local XP in mock user
+      final user = ref.read(currentUserProvider);
+      if (user != null) {
+        final targetLvl = state.levels.firstWhere((l) => l.id == levelId, orElse: () => state.levels.first);
+        final updatedXp = user.xpTotal + targetLvl.xpReward;
+        ref.read(authProvider.notifier).updateLocalUser(user.copyWith(
+          xpTotal: updatedXp,
+          level: updatedXp ~/ 500 + 1,
+        ));
+      }
       return true;
     }
 
@@ -198,7 +211,13 @@ class LevelNotifier extends StateNotifier<LevelState> {
           'timeSpentMinutes': timeSpentMinutes,
         },
       );
-      return response.statusCode == 200;
+      if (response.statusCode == 200) {
+        // Refresh user profile details & roadmaps list to sync XP & levels
+        await ref.read(authProvider.notifier).getMe();
+        await ref.read(roadmapProvider.notifier).fetchRoadmaps(forceRefresh: true);
+        return true;
+      }
+      return false;
     } catch (e) {
       debugPrint('[LevelNotifier] verifyAndCompleteLevel failed: $e');
       return false;
@@ -219,7 +238,7 @@ class LevelNotifier extends StateNotifier<LevelState> {
 // ─────────────────────────────────────────────────────────────
 
 final levelProvider = StateNotifierProvider.family<LevelNotifier, LevelState, String>(
-  (ref, roadmapId) => LevelNotifier(roadmapId),
+  (ref, roadmapId) => LevelNotifier(roadmapId, ref),
 );
 
 /// Get a single level by ID across all loaded roadmaps

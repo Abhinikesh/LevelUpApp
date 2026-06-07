@@ -39,21 +39,23 @@ class _MapViewScreenState extends ConsumerState<MapViewScreen>
   }
 
   void _scrollToActive() {
+    // Capture screen height before entering the async gap to avoid
+    // use_build_context_synchronously warning.
+    final screenHeight = MediaQuery.of(context).size.height;
     Future.delayed(const Duration(milliseconds: 400), () {
-      if (_scrollController.hasClients) {
-        final levels = ref.read(levelProvider(widget.roadmapId)).levels;
-        final activeIdx =
-            levels.indexWhere((l) => l.status == LevelStatus.active);
-        if (activeIdx >= 0) {
-          final offset =
-              (levels.length - activeIdx) * (_kNodeSpacing + _kNodeSize) -
-                  MediaQuery.of(context).size.height / 2;
-          _scrollController.animateTo(
-            offset.clamp(0, _scrollController.position.maxScrollExtent),
-            duration: const Duration(milliseconds: 600),
-            curve: Curves.easeOutCubic,
-          );
-        }
+      if (!mounted || !_scrollController.hasClients) return;
+      final levels = ref.read(levelProvider(widget.roadmapId)).levels;
+      final activeIdx =
+          levels.indexWhere((l) => l.status == LevelStatus.active);
+      if (activeIdx >= 0) {
+        final offset =
+            (levels.length - activeIdx) * (_kNodeSpacing + _kNodeSize) -
+                screenHeight / 2;
+        _scrollController.animateTo(
+          offset.clamp(0, _scrollController.position.maxScrollExtent),
+          duration: const Duration(milliseconds: 600),
+          curve: Curves.easeOutCubic,
+        );
       }
     });
   }
@@ -74,9 +76,29 @@ class _MapViewScreenState extends ConsumerState<MapViewScreen>
         .firstWhere((r) => r?.id == widget.roadmapId, orElse: () => null);
 
     return Scaffold(
-      backgroundColor: AppColors.bgDark,
+      backgroundColor: const Color(0xFF0A0A0F),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: AppColors.brand,
+        elevation: 8,
+        onPressed: _scrollToActive,
+        child: const Icon(Icons.gps_fixed, color: Colors.white),
+      ),
       body: Stack(
         children: [
+          // Radial glow background
+          Container(
+            decoration: const BoxDecoration(
+              gradient: RadialGradient(
+                center: Alignment(0, -0.3),
+                radius: 1.3,
+                colors: [
+                  Color(0xFF16113A),
+                  Color(0xFF0A0A0F),
+                ],
+              ),
+            ),
+          ),
+          
           // Dot grid background
           CustomPaint(
             painter: _DotGridPainter(),
@@ -103,7 +125,7 @@ class _MapViewScreenState extends ConsumerState<MapViewScreen>
               else
                 SliverPadding(
                   padding: EdgeInsets.only(
-                    bottom: MediaQuery.of(context).padding.bottom + 40,
+                    bottom: MediaQuery.of(context).padding.bottom + 100,
                     top: 16,
                   ),
                   sliver: SliverToBoxAdapter(
@@ -248,19 +270,19 @@ class _MapBody extends StatelessWidget {
     required this.roadmapId,
   });
 
-  double _xOffset(int index) {
-    final pattern = index % 4;
+  double _xOffsetForIndex(int idx) {
+    final pattern = idx % 4;
     switch (pattern) {
       case 0:
-        return 0;
+        return 0.0;
       case 1:
-        return _kHorizontalOffset;
+        return 80.0;
       case 2:
-        return 0;
+        return 0.0;
       case 3:
-        return -_kHorizontalOffset;
+        return -80.0;
       default:
-        return 0;
+        return 0.0;
     }
   }
 
@@ -274,19 +296,18 @@ class _MapBody extends StatelessWidget {
     return Column(
       children: [
         for (int i = 0; i < reversed.length; i++) ...[
-          // World header every 5 levels
-          if ((reversed.length - 1 - i) % 5 == 4)
-            _WorldHeader(world: (reversed.length - 1 - i) ~/ 5 + 1)
+          if ((reversed[i].levelNumber % 5 == 0) || (i == 0 && reversed[i].levelNumber < 5))
+            _WorldHeader(world: (reversed[i].levelNumber - 1) ~/ 5 + 1)
                 .animate()
                 .fadeIn(duration: 300.ms),
 
-          // Connector above (not for last item)
+          // Connector above (connecting from reversed[i] at bottom to reversed[i-1] at top)
           if (i > 0)
             _ConnectorWidget(
               isCompleted: reversed[i].status == LevelStatus.completed ||
                   reversed[i - 1].status == LevelStatus.completed,
-              fromOffset: center + _xOffset(reversed.length - 1 - i),
-              toOffset: center + _xOffset(reversed.length - i),
+              fromX: center + _xOffsetForIndex(reversed[i].levelNumber - 1) + _kNodeSize / 2,
+              toX: center + _xOffsetForIndex(reversed[i - 1].levelNumber - 1) + _kNodeSize / 2,
             ),
 
           // Level node
@@ -296,7 +317,7 @@ class _MapBody extends StatelessWidget {
               alignment: Alignment.center,
               children: [
                 Transform.translate(
-                  offset: Offset(_xOffset(reversed.length - 1 - i), 0),
+                  offset: Offset(_xOffsetForIndex(reversed[i].levelNumber - 1), 0),
                   child: _LevelNode(
                     level: reversed[i],
                     pulseCtrl: pulseCtrl,
@@ -332,15 +353,15 @@ class _WorldHeader extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       height: 56,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
+        gradient: const LinearGradient(
           colors: [
-            AppColors.brand.withValues(alpha: 0.15),
-            AppColors.coral.withValues(alpha: 0.1),
+            Color(0x226C63FF),
+            Color(0x11FF6584),
           ],
         ),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-            color: AppColors.brand.withValues(alpha: 0.3), width: 1),
+            color: AppColors.brand.withOpacity(0.3), width: 1),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -369,25 +390,25 @@ class _WorldHeader extends StatelessWidget {
 // ─── Connector Widget ──────────────────────────────────────────
 class _ConnectorWidget extends StatelessWidget {
   final bool isCompleted;
-  final double fromOffset;
-  final double toOffset;
+  final double fromX;
+  final double toX;
 
   const _ConnectorWidget({
     required this.isCompleted,
-    required this.fromOffset,
-    required this.toOffset,
+    required this.fromX,
+    required this.toX,
   });
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: _kNodeSpacing - _kNodeSize,
+      height: 48,
       width: double.infinity,
       child: CustomPaint(
         painter: _ConnectorPainter(
           isCompleted: isCompleted,
-          fromX: fromOffset + _kNodeSize / 2,
-          toX: toOffset + _kNodeSize / 2,
+          fromX: fromX,
+          toX: toX,
         ),
       ),
     );
@@ -406,22 +427,21 @@ class _ConnectorPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
       ..color = isCompleted ? AppColors.green : AppColors.border
-      ..strokeWidth = 3
+      ..strokeWidth = 4
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
     final path = Path()
-      ..moveTo(fromX, 0)
+      ..moveTo(fromX, size.height) // bottom
       ..cubicTo(
-        fromX, size.height * 0.3,
-        toX, size.height * 0.7,
-        toX, size.height,
+        fromX, size.height * 0.5,
+        toX, size.height * 0.5,
+        toX, 0, // top
       );
 
     if (isCompleted) {
       canvas.drawPath(path, paint);
     } else {
-      // Dashed
       _drawDashed(canvas, path, paint);
     }
   }
@@ -429,7 +449,9 @@ class _ConnectorPainter extends CustomPainter {
   void _drawDashed(Canvas canvas, Path path, Paint paint) {
     const dashLen = 8.0;
     const gapLen = 6.0;
-    final metric = path.computeMetrics().first;
+    final metrics = path.computeMetrics();
+    if (metrics.isEmpty) return;
+    final metric = metrics.first;
     double d = 0;
     while (d < metric.length) {
       final end = (d + dashLen).clamp(0, metric.length);
@@ -440,7 +462,7 @@ class _ConnectorPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _ConnectorPainter o) =>
-      o.isCompleted != isCompleted;
+      o.isCompleted != isCompleted || o.fromX != fromX || o.toX != toX;
 }
 
 // ─── Level Node ────────────────────────────────────────────────

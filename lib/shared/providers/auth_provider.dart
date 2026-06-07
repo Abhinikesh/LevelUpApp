@@ -1,10 +1,11 @@
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/network/api_interceptors.dart';
 import '../../core/network/dio_client.dart';
-import '../../core/storage/secure_storage.dart';
+import '../../core/storage/token_storage.dart';
 import '../../models/badge_model.dart';
 import '../../models/user_model.dart';
 
@@ -74,9 +75,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> _init() async {
-    final hasToken = await SecureStorageService.hasToken();
-    if (hasToken) {
-      // Try to fetch real user; fall back to cached mock
+    final token = await TokenStorage.getToken();
+    if (token != null && token.isNotEmpty) {
+      final userJson = await TokenStorage.getUser();
+      UserModel? cachedUser;
+      if (userJson != null) {
+        try {
+          cachedUser = UserModel.fromJson(jsonDecode(userJson));
+        } catch (_) {}
+      }
+      state = AuthState(
+        currentUser: cachedUser,
+        isAuthenticated: true,
+      );
       await getMe();
     }
   }
@@ -97,8 +108,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         name: _nameFromEmail(email),
         email: email,
       );
-      await SecureStorageService.saveToken('mock-jwt-token-${mock.id}');
-      await SecureStorageService.saveUserId(mock.id);
+      await TokenStorage.saveToken('mock-jwt-token-${mock.id}');
+      await TokenStorage.saveUser(jsonEncode(mock.toJson()));
       state = state.copyWith(
         isLoading: false,
         currentUser: mock,
@@ -115,14 +126,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
       final data = response.data as Map<String, dynamic>;
       final token = data['token'] as String?;
-      final refreshToken = data['refreshToken'] as String?;
       final userData = data['user'] as Map<String, dynamic>?;
 
-      if (token != null) await SecureStorageService.saveToken(token);
-      if (refreshToken != null) await SecureStorageService.saveRefreshToken(refreshToken);
+      if (token != null) {
+        await TokenStorage.saveToken(token);
+      }
 
       final user = userData != null ? UserModel.fromJson(userData) : null;
-      if (user != null) await SecureStorageService.saveUserId(user.id);
+      if (user != null) {
+        await TokenStorage.saveUser(jsonEncode(user.toJson()));
+      }
 
       state = state.copyWith(
         isLoading: false,
@@ -156,8 +169,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
     if (_isPlaceholderBackend) {
       await Future.delayed(const Duration(milliseconds: 1100));
       final mock = _mockUser(name: name, email: email);
-      await SecureStorageService.saveToken('mock-jwt-token-${mock.id}');
-      await SecureStorageService.saveUserId(mock.id);
+      await TokenStorage.saveToken('mock-jwt-token-${mock.id}');
+      await TokenStorage.saveUser(jsonEncode(mock.toJson()));
       state = state.copyWith(
         isLoading: false,
         currentUser: mock,
@@ -174,14 +187,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
       final data = response.data as Map<String, dynamic>;
       final token = data['token'] as String?;
-      final refreshToken = data['refreshToken'] as String?;
       final userData = data['user'] as Map<String, dynamic>?;
 
-      if (token != null) await SecureStorageService.saveToken(token);
-      if (refreshToken != null) await SecureStorageService.saveRefreshToken(refreshToken);
+      if (token != null) {
+        await TokenStorage.saveToken(token);
+      }
 
       final user = userData != null ? UserModel.fromJson(userData) : null;
-      if (user != null) await SecureStorageService.saveUserId(user.id);
+      if (user != null) {
+        await TokenStorage.saveUser(jsonEncode(user.toJson()));
+      }
 
       state = state.copyWith(
         isLoading: false,
@@ -207,11 +222,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> getMe() async {
     // In mock mode, rehydrate from stored token
     if (_isPlaceholderBackend) {
-      final token = await SecureStorageService.getToken();
+      final token = await TokenStorage.getToken();
       if (token != null && token.isNotEmpty) {
+        final userJson = await TokenStorage.getUser();
+        UserModel? cachedUser;
+        if (userJson != null) {
+          try {
+            cachedUser = UserModel.fromJson(jsonDecode(userJson));
+          } catch (_) {}
+        }
         state = state.copyWith(
           isLoading: false,
-          currentUser: _mockUser(),
+          currentUser: cachedUser ?? _mockUser(),
           isAuthenticated: true,
         );
       } else {
@@ -226,6 +248,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final data = response.data as Map<String, dynamic>;
       final userData = data['user'] as Map<String, dynamic>? ?? data;
       final user = UserModel.fromJson(userData);
+      await TokenStorage.saveUser(jsonEncode(user.toJson()));
 
       state = state.copyWith(
         isLoading: false,
@@ -252,7 +275,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         await _dio.post(ApiConstants.logout);
       } catch (_) {}
     }
-    await SecureStorageService.clearAll();
+    await TokenStorage.clearAll();
     if (!_isPlaceholderBackend) DioClient.reset();
     state = const AuthState();
   }
