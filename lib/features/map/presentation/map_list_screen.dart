@@ -8,8 +8,8 @@ import '../../../core/constants/app_spacing.dart';
 import '../../../core/router/app_router.dart';
 import '../../../models/roadmap_model.dart';
 import '../../../shared/providers/roadmap_provider.dart';
-import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/loading_shimmer.dart';
+import '../../../shared/widgets/premium_animations.dart';
 
 class MapListScreen extends ConsumerStatefulWidget {
   const MapListScreen({super.key});
@@ -23,12 +23,13 @@ class _MapListScreenState extends ConsumerState<MapListScreen> {
   String _searchQuery = '';
   final _searchCtrl = TextEditingController();
 
-  final _filters = [
-    ('all', 'All Campaigns'),
-    ('study', '📚 Study'),
-    ('gym', '💪 Fitness'),
-    ('work', '💼 Career'),
-    ('custom', '🎯 Custom'),
+  // filter id, label (no emoji for cleaner chips)
+  static const _filters = [
+    ('all', 'All'),
+    ('study', 'Study'),
+    ('gym', 'Fitness'),
+    ('work', 'Work'),
+    ('custom', 'Custom'),
   ];
 
   @override
@@ -47,447 +48,426 @@ class _MapListScreenState extends ConsumerState<MapListScreen> {
   Widget build(BuildContext context) {
     final roadmapState = ref.watch(roadmapProvider);
     final allRoadmaps = roadmapState.roadmaps;
+    final activeCount = allRoadmaps.where((r) => !r.isCompleted).length;
 
-    // Filter and search
     final filtered = allRoadmaps.where((r) {
-      final matchesFilter = _selectedFilter == 'all' || r.type == _selectedFilter;
-      final matchesSearch = r.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          r.description.toLowerCase().contains(_searchQuery.toLowerCase());
+      final matchesFilter =
+          _selectedFilter == 'all' || r.type == _selectedFilter;
+      final q = _searchQuery.toLowerCase();
+      final matchesSearch = q.isEmpty ||
+          r.title.toLowerCase().contains(q) ||
+          r.description.toLowerCase().contains(q);
       return matchesFilter && matchesSearch;
     }).toList();
 
     return Scaffold(
       backgroundColor: AppColors.bgDark,
+      // FAB: gradient circle, navigates to create
+      floatingActionButton: BounceOnTap(
+        onTap: () => context.push(AppRoutes.create),
+        child: Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: AppColors.brandGradient,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.brand.withValues(alpha: 0.45),
+                blurRadius: 20,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: const Icon(Icons.add, color: Colors.white, size: 28),
+        ),
+      ),
       body: SafeArea(
         bottom: false,
-        child: NestedScrollView(
-          headerSliverBuilder: (context, innerBoxIsScrolled) => [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.pagePadding,
-                  vertical: AppSpacing.md,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '🗺️ My Campaigns',
-                          style: GoogleFonts.syne(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${allRoadmaps.length} active roadmap${allRoadmaps.length != 1 ? 's' : ''}',
-                          style: GoogleFonts.inter(
-                            fontSize: 13,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                    GestureDetector(
-                      onTap: () => context.push(AppRoutes.create),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          gradient: AppColors.brandGradient,
-                          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.brand.withValues(alpha: 0.3),
-                              blurRadius: 8,
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.add, color: Colors.white, size: 16),
-                            const SizedBox(width: 4),
-                            Text(
-                              'New',
-                              style: GoogleFonts.syne(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            // Search Bar & Filter chips
-            SliverAppBar(
-              backgroundColor: AppColors.bgDark,
-              pinned: true,
-              elevation: 0,
-              automaticallyImplyLeading: false,
-              toolbarHeight: 120,
-              titleSpacing: 0,
-              title: Column(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Header ──────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.pagePadding, 16, AppSpacing.pagePadding, 0),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Search Input
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.pagePadding),
-                    child: Container(
-                      height: 46,
-                      decoration: BoxDecoration(
-                        color: AppColors.bgCard,
-                        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                        border: Border.all(color: AppColors.border),
-                      ),
-                      child: Row(
-                        children: [
-                          const SizedBox(width: 12),
-                          const Icon(Icons.search, color: AppColors.textMuted, size: 18),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: TextField(
-                              controller: _searchCtrl,
-                              onChanged: (val) => setState(() => _searchQuery = val),
-                              style: GoogleFonts.inter(
-                                fontSize: 14,
-                                color: AppColors.textPrimary,
-                              ),
-                              decoration: InputDecoration(
-                                hintText: 'Search campaigns...',
-                                hintStyle: GoogleFonts.inter(
-                                  fontSize: 14,
-                                  color: AppColors.textMuted,
-                                ),
-                                border: InputBorder.none,
-                                isDense: true,
-                              ),
-                            ),
-                          ),
-                          if (_searchQuery.isNotEmpty)
-                            IconButton(
-                              icon: const Icon(Icons.close, size: 16, color: AppColors.textMuted),
-                              onPressed: () {
-                                _searchCtrl.clear();
-                                setState(() => _searchQuery = '');
-                              },
-                            ),
-                        ],
-                      ),
+                  Text(
+                    'My Roadmaps',
+                    style: GoogleFonts.spaceMono(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                      letterSpacing: 0.3,
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  // Filter Chips
-                  SizedBox(
-                    height: 38,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.pagePadding),
-                      itemCount: _filters.length,
-                      itemBuilder: (context, i) {
-                        final filter = _filters[i];
-                        final isSelected = _selectedFilter == filter.$1;
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: GestureDetector(
-                            onTap: () => setState(() => _selectedFilter = filter.$1),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? AppColors.brand.withValues(alpha: 0.15)
-                                    : AppColors.bgCard,
-                                borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
-                                border: Border.all(
-                                  color: isSelected
-                                      ? AppColors.brand.withValues(alpha: 0.4)
-                                      : AppColors.border,
-                                ),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  filter.$2,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 12,
-                                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                                    color: isSelected ? AppColors.brand : AppColors.textSecondary,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
+                  const SizedBox(height: 4),
+                  Text(
+                    '$activeCount active roadmap${activeCount != 1 ? 's' : ''}',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
                     ),
                   ),
                 ],
-              ),
+              ).animate().fadeIn(duration: 350.ms).slideY(begin: -0.04),
             ),
-          ],
-          body: roadmapState.isLoading && !roadmapState.hasLoaded
-              ? const Padding(
-                  padding: EdgeInsets.all(AppSpacing.pagePadding),
-                  child: Center(child: ShimmerCard(height: 140)),
-                )
-              : filtered.isEmpty
-                  ? Padding(
-                      padding: const EdgeInsets.all(AppSpacing.pagePadding),
-                      child: Center(
-                        child: EmptyRoadmaps(
-                          onCreateTap: () => context.push(AppRoutes.create),
+
+            const SizedBox(height: 14),
+
+            // ── Search bar ───────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.pagePadding),
+              child: Container(
+                height: 46,
+                decoration: BoxDecoration(
+                  color: AppColors.bgCard,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  children: [
+                    const SizedBox(width: 12),
+                    const Icon(Icons.search_rounded,
+                        color: AppColors.textMuted, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: _searchCtrl,
+                        onChanged: (v) => setState(() => _searchQuery = v),
+                        style: GoogleFonts.inter(
+                            fontSize: 14, color: AppColors.textPrimary),
+                        decoration: InputDecoration(
+                          hintText: 'Search roadmaps...',
+                          hintStyle: GoogleFonts.inter(
+                              fontSize: 14, color: AppColors.textMuted),
+                          border: InputBorder.none,
+                          isDense: true,
                         ),
                       ),
-                    )
-                  : ListView.builder(
-                      physics: const BouncingScrollPhysics(),
-                      padding: EdgeInsets.only(
-                        left: AppSpacing.pagePadding,
-                        right: AppSpacing.pagePadding,
-                        top: AppSpacing.sm,
-                        bottom: MediaQuery.of(context).padding.bottom + 80,
-                      ),
-                      itemCount: filtered.length,
-                      itemBuilder: (context, i) {
-                        final roadmap = filtered[i];
-                        return _RoadmapCard(roadmap: roadmap, index: i)
-                            .animate()
-                            .fadeIn(delay: Duration(milliseconds: i * 50))
-                            .slideY(begin: 0.1, end: 0, delay: Duration(milliseconds: i * 50));
-                      },
                     ),
+                    if (_searchQuery.isNotEmpty)
+                      GestureDetector(
+                        onTap: () {
+                          _searchCtrl.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                        child: const Padding(
+                          padding: EdgeInsets.all(10),
+                          child: Icon(Icons.close,
+                              size: 16, color: AppColors.textMuted),
+                        ),
+                      ),
+                  ],
+                ),
+              ).animate().fadeIn(delay: 60.ms),
+            ),
+
+            const SizedBox(height: 12),
+
+            // ── Filter chips ─────────────────────────────────────
+            SizedBox(
+              height: 36,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.pagePadding),
+                itemCount: _filters.length,
+                itemBuilder: (_, i) {
+                  final (id, label) = _filters[i];
+                  final isSelected = _selectedFilter == id;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: GestureDetector(
+                      onTap: () => setState(() => _selectedFilter = id),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 6),
+                        decoration: BoxDecoration(
+                          gradient:
+                              isSelected ? AppColors.brandGradient : null,
+                          color: isSelected ? null : Colors.transparent,
+                          borderRadius: BorderRadius.circular(100),
+                          border: Border.all(
+                            color: isSelected
+                                ? Colors.transparent
+                                : AppColors.border,
+                          ),
+                          boxShadow: isSelected
+                              ? [
+                                  BoxShadow(
+                                    color:
+                                        AppColors.brand.withValues(alpha: 0.3),
+                                    blurRadius: 8,
+                                  )
+                                ]
+                              : null,
+                        ),
+                        child: Text(
+                          label,
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.w500,
+                            color: isSelected
+                                ? Colors.white
+                                : AppColors.textMuted,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ).animate().fadeIn(delay: 100.ms),
+
+            const SizedBox(height: 12),
+
+            // ── List ─────────────────────────────────────────────
+            Expanded(
+              child: roadmapState.isLoading && !roadmapState.hasLoaded
+                  ? _buildShimmer()
+                  : filtered.isEmpty
+                      ? _buildEmpty(context)
+                      : ListView.builder(
+                          physics: const BouncingScrollPhysics(),
+                          padding: EdgeInsets.only(
+                            left: AppSpacing.pagePadding,
+                            right: AppSpacing.pagePadding,
+                            top: 4,
+                            bottom:
+                                MediaQuery.of(context).padding.bottom + 100,
+                          ),
+                          itemCount: filtered.length,
+                          itemBuilder: (_, i) {
+                            return _RoadmapListCard(
+                                    roadmap: filtered[i])
+                                .animate()
+                                .fadeIn(
+                                    delay:
+                                        Duration(milliseconds: 120 + i * 55))
+                                .slideY(
+                                    begin: 0.06,
+                                    end: 0,
+                                    delay: Duration(
+                                        milliseconds: 120 + i * 55));
+                          },
+                        ),
+            ),
+          ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildShimmer() {
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.pagePadding, vertical: 8),
+      itemCount: 4,
+      itemBuilder: (_, __) => const Padding(
+        padding: EdgeInsets.only(bottom: 12),
+        child: ShimmerCard(height: 90),
+      ),
+    );
+  }
+
+  Widget _buildEmpty(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text('🗺️', style: TextStyle(fontSize: 56)),
+          const SizedBox(height: 16),
+          Text(
+            'No roadmaps yet',
+            style: GoogleFonts.spaceMono(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Create your first goal to get started',
+            style: GoogleFonts.inter(
+                fontSize: 14, color: AppColors.textSecondary),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          BounceOnTap(
+            onTap: () => context.push(AppRoutes.create),
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 28, vertical: 13),
+              decoration: BoxDecoration(
+                gradient: AppColors.brandGradient,
+                borderRadius: BorderRadius.circular(50),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.brand.withValues(alpha: 0.4),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Text(
+                '+ Create Roadmap',
+                style: GoogleFonts.spaceMono(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _RoadmapCard extends StatelessWidget {
+// ─── Roadmap List Card ─────────────────────────────────────────
+class _RoadmapListCard extends StatelessWidget {
   final RoadmapModel roadmap;
-  final int index;
+  const _RoadmapListCard({required this.roadmap});
 
-  const _RoadmapCard({required this.roadmap, required this.index});
-
-  Color get _typeColor {
+  Color get _accentColor {
     switch (roadmap.type) {
-      case 'gym':
-        return AppColors.coral;
-      case 'work':
-        return AppColors.gold;
       case 'study':
         return AppColors.brand;
+      case 'gym':
+        return const Color(0xFFFF8C00);
+      case 'work':
+        return AppColors.green;
       default:
-        return AppColors.teal;
+        return AppColors.coral;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final color = _accentColor;
     final progress = roadmap.progressPercent;
-    final isDone = roadmap.isCompleted;
 
     return GestureDetector(
       onTap: () => context.push('${AppRoutes.map}/${roadmap.id}'),
       child: Container(
-        margin: const EdgeInsets.only(bottom: AppSpacing.md),
+        margin: const EdgeInsets.only(bottom: 12),
+        constraints: const BoxConstraints(minHeight: 90),
         decoration: BoxDecoration(
           color: AppColors.bgCard,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: AppColors.border),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.2),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
             ),
           ],
         ),
-        child: Column(
-          children: [
-            // Colored strip at top of card
-            Container(
-              height: 4,
-              decoration: BoxDecoration(
-                color: _typeColor,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(AppSpacing.radiusLg)),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Row(
+            children: [
+              // Left accent bar: 4px full height
+              Container(
+                width: 4,
+                color: color,
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.base),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        roadmap.coverEmoji ?? roadmap.typeEmoji,
-                        style: const TextStyle(fontSize: 24),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          roadmap.title,
-                          style: GoogleFonts.syne(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: _typeColor.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
-                        ),
-                        child: Text(
-                          roadmap.type.toUpperCase(),
-                          style: GoogleFonts.inter(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            color: _typeColor,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ),
-                    ],
+
+              // Emoji circle
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
                   ),
-                  const SizedBox(height: 8),
-                  if (roadmap.description.isNotEmpty) ...[
-                    Text(
-                      roadmap.description,
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                  child: Center(
+                    child: Text(
+                      roadmap.coverEmoji ?? roadmap.typeEmoji,
+                      style: const TextStyle(fontSize: 22),
                     ),
-                    const SizedBox(height: 12),
-                  ],
-                  // Progress Row
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  ),
+                ),
+              ),
+
+              // Center content
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
+                      // Title
                       Text(
-                        'Level ${roadmap.currentLevel} of ${roadmap.totalLevels}',
+                        roadmap.title,
+                        style: GoogleFonts.spaceMono(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      // Progress subtitle
+                      Text(
+                        'Level ${roadmap.currentLevel} of ${roadmap.totalLevels} • ${(progress * 100).toInt()}% complete',
                         style: GoogleFonts.inter(
-                          fontSize: 11,
+                          fontSize: 12,
                           color: AppColors.textMuted,
                         ),
                       ),
-                      Text(
-                        '${(progress * 100).toInt()}%',
-                        style: GoogleFonts.syne(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: _typeColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Stack(
-                    children: [
-                      Container(
-                        height: 6,
-                        decoration: BoxDecoration(
-                          color: AppColors.border,
-                          borderRadius: BorderRadius.circular(3),
-                        ),
-                      ),
-                      FractionallySizedBox(
-                        widthFactor: progress.clamp(0.0, 1.0),
-                        child: Container(
-                          height: 6,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [_typeColor, _typeColor.withValues(alpha: 0.7)],
-                            ),
-                            borderRadius: BorderRadius.circular(3),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  // Footer Row
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          if (roadmap.xpEarned > 0) ...[
-                            const Text('⚡', style: TextStyle(fontSize: 11)),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${roadmap.xpEarned} XP',
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.gold,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                          ],
-                          if (roadmap.examMode) ...[
-                            const Icon(Icons.timer_outlined, size: 12, color: AppColors.coral),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Exam Mode',
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                color: AppColors.coral,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                      if (isDone)
-                        Row(
+                      const SizedBox(height: 8),
+                      // Thin 3px progress bar
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(2),
+                        child: Stack(
                           children: [
-                            const Icon(Icons.check_circle_outline, size: 14, color: AppColors.green),
-                            const SizedBox(width: 4),
-                            Text(
-                              'COMPLETED',
-                              style: GoogleFonts.syne(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.green,
+                            Container(
+                              height: 3,
+                              color: AppColors.bgCardLight,
+                            ),
+                            FractionallySizedBox(
+                              widthFactor: progress.clamp(0.0, 1.0),
+                              child: Container(
+                                height: 3,
+                                decoration: BoxDecoration(
+                                  color: color,
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
                               ),
                             ),
-                          ],
-                        )
-                      else
-                        Row(
-                          children: [
-                            Text(
-                              'Play Map',
-                              style: GoogleFonts.syne(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                color: _typeColor,
-                              ),
-                            ),
-                            Icon(Icons.chevron_right_rounded, size: 14, color: _typeColor),
                           ],
                         ),
+                      ),
                     ],
                   ),
-                ],
+                ),
               ),
-            ),
-          ],
+
+              // Chevron
+              Padding(
+                padding: const EdgeInsets.only(right: 14),
+                child: Icon(
+                  Icons.chevron_right_rounded,
+                  color: AppColors.textMuted,
+                  size: 22,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

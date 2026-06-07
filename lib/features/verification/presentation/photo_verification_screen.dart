@@ -52,8 +52,10 @@ class _PhotoVerificationScreenState
     });
     if (passed) {
       _confetti.play();
+      final level = ref.read(levelByIdProvider(widget.levelId));
+      final roadmapId = level?.roadmapId ?? widget.levelId.split('-level-').first;
       ref
-          .read(levelProvider(widget.levelId.split('-level-').first).notifier)
+          .read(levelProvider(roadmapId).notifier)
           .verifyAndCompleteLevel(
             levelId: widget.levelId,
             proofType: 'photo',

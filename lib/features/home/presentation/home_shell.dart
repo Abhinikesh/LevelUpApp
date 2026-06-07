@@ -1,6 +1,4 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -8,7 +6,6 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/utils/helpers.dart';
 import '../../../shared/providers/auth_provider.dart';
-import '../../../shared/widgets/streak_badge.dart';
 import '../../../shared/widgets/premium_animations.dart';
 
 class HomeShell extends ConsumerStatefulWidget {
@@ -37,7 +34,6 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
-    // Sync index from current route
     final loc = GoRouterState.of(context).matchedLocation;
     for (int i = 0; i < _tabs.length; i++) {
       if (loc.startsWith(_tabs[i].path)) { _selectedIndex = i; break; }
@@ -47,9 +43,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     return Scaffold(
       backgroundColor: AppColors.bgDark,
       extendBody: true,
-      // ── Custom top app bar ───────────────────────────────
       appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(64),
+        preferredSize: const Size.fromHeight(60),
         child: _TopBar(
           xp: user?.xpTotal ?? 0,
           streak: user?.streakCount ?? 0,
@@ -84,87 +79,111 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
   const _TopBar({required this.xp, required this.streak, required this.screenTitle});
 
   @override
-  Size get preferredSize => const Size.fromHeight(64);
+  Size get preferredSize => const Size.fromHeight(60);
 
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.bgDark.withValues(alpha: 0.6),
-        border: Border(
-          bottom: BorderSide(color: AppColors.border.withValues(alpha: 0.3)),
+        color: AppColors.bgDark,
+        border: const Border(
+          bottom: BorderSide(color: AppColors.border, width: 1),
         ),
       ),
-      child: ClipRRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-          child: SafeArea(
-            bottom: false,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.pagePadding, vertical: AppSpacing.sm),
-              child: Row(
-                children: [
-                  // Logo with custom gradient styling
-                  ShaderMask(
-                    shaderCallback: (b) => AppColors.brandGradient
-                        .createShader(Rect.fromLTWH(0, 0, b.width, b.height)),
-                    child: Text(
-                      'STEPUP',
-                      style: GoogleFonts.syne(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                  ),
-                  const Spacer(),
-                  // XP Pill
-                  BounceOnTap(
-                    onTap: () => _showXpModal(context, xp),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        gradient: AppColors.goldGradient,
-                        borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.gold.withValues(alpha: 0.25),
-                            blurRadius: 10,
-                            offset: const Offset(0, 2),
-                          )
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text('⚡', style: TextStyle(fontSize: 13)),
-                          const SizedBox(width: 4),
-                          Text(
-                            AppHelpers.formatXP(xp),
-                            style: GoogleFonts.syne(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  // Streak Badge
-                  BounceOnTap(
-                    onTap: () => _showStreakModal(context, streak),
-                    child: StreakBadge(streak: streak, size: StreakBadgeSize.small),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  // Notification bell
-                  const _NotificationBell(),
-                ],
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.pagePadding, vertical: 8.0),
+          child: Row(
+            children: [
+              // Logo: SpaceMono, 20px, brand purple, tracked (letterSpacing)
+              Text(
+                'STEPUP',
+                style: GoogleFonts.spaceMono(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.brand,
+                  letterSpacing: 1.5,
+                ),
               ),
-            ),
+              const Spacer(),
+              // XP Pill: gold background, lightning icon, XP number (SpaceGrotesk)
+              BounceOnTap(
+                onTap: () => _showXpModal(context, xp),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: AppColors.gold,
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('⚡', style: TextStyle(fontSize: 12)),
+                      const SizedBox(width: 4),
+                      Text(
+                        AppHelpers.formatXP(xp),
+                        style: GoogleFonts.spaceGrotesk(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.bgDark,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Streak Pill: dark orange background, fire emoji, streak number (SpaceGrotesk)
+              BounceOnTap(
+                onTap: () => _showStreakModal(context, streak),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD84315), // Dark orange
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('🔥', style: TextStyle(fontSize: 12)),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$streak',
+                        style: GoogleFonts.spaceGrotesk(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              // Bell: simple icon button, no background (ONE bell icon on the right side)
+              IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                icon: const Icon(
+                  Icons.notifications_none_rounded,
+                  color: AppColors.textPrimary,
+                  size: 22,
+                ),
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      backgroundColor: AppColors.bgCard,
+                      content: Text(
+                        'Notifications coming soon!',
+                        style: GoogleFonts.inter(color: AppColors.textPrimary),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
           ),
         ),
       ),
@@ -182,8 +201,8 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
         padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
         decoration: BoxDecoration(
           color: AppColors.bgCard,
-          border: Border(
-            top: BorderSide(color: AppColors.gold.withValues(alpha: 0.3), width: 1.5),
+          border: const Border(
+            top: BorderSide(color: AppColors.gold, width: 1.5),
           ),
           borderRadius: const BorderRadius.vertical(top: Radius.circular(AppSpacing.radiusXxl)),
         ),
@@ -202,7 +221,7 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.gold.withValues(alpha: 0.08),
+                color: AppColors.gold.withOpacity(0.08),
                 shape: BoxShape.circle,
               ),
               child: const Text('⚡', style: TextStyle(fontSize: 36)),
@@ -210,9 +229,9 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
             const SizedBox(height: 16),
             Text(
               '${AppHelpers.formatXP(xp)} XP Total',
-              style: GoogleFonts.syne(
+              style: GoogleFonts.spaceMono(
                 fontSize: 26,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.bold,
                 color: AppColors.gold,
               ),
             ),
@@ -243,8 +262,8 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
         padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
         decoration: BoxDecoration(
           color: AppColors.bgCard,
-          border: Border(
-            top: BorderSide(color: AppColors.coral.withValues(alpha: 0.3), width: 1.5),
+          border: const Border(
+            top: BorderSide(color: AppColors.coral, width: 1.5),
           ),
           borderRadius: const BorderRadius.vertical(top: Radius.circular(AppSpacing.radiusXxl)),
         ),
@@ -263,7 +282,7 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.coral.withValues(alpha: 0.08),
+                color: AppColors.coral.withOpacity(0.08),
                 shape: BoxShape.circle,
               ),
               child: const WobbleWidget(
@@ -274,9 +293,9 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
             const SizedBox(height: 16),
             Text(
               '$streak Day Streak!',
-              style: GoogleFonts.syne(
+              style: GoogleFonts.spaceMono(
                 fontSize: 26,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.bold,
                 color: AppColors.coral,
               ),
             ),
@@ -297,57 +316,7 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
   }
 }
 
-class _NotificationBell extends StatelessWidget {
-  const _NotificationBell();
-
-  @override
-  Widget build(BuildContext context) {
-    return BounceOnTap(
-      onTap: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Notifications coming soon!'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      },
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: AppColors.bgCard,
-              shape: BoxShape.circle,
-              border: Border.all(color: AppColors.border),
-            ),
-            child: const Icon(
-              Icons.notifications_none_rounded,
-              color: AppColors.textSecondary,
-              size: 20,
-            ),
-          ),
-          Positioned(
-            right: 1,
-            top: 1,
-            child: Container(
-              width: 9,
-              height: 9,
-              decoration: const BoxDecoration(
-                color: AppColors.coral,
-                shape: BoxShape.circle,
-              ),
-            ).animate(onPlay: (c) => c.repeat(reverse: true))
-                .scaleXY(begin: 1.0, end: 1.3, duration: 800.ms),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Glassmorphic Bottom Navigation Bar ──────────────────────────
+// ─── Bottom Navigation Bar with Stack ────────────────────────────
 class _BottomNav extends StatelessWidget {
   final int selected;
   final List<_NavItem> tabs;
@@ -357,47 +326,65 @@ class _BottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const double barHeight = 72.0;
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
 
-    return Container(
-      height: barHeight + MediaQuery.of(context).padding.bottom,
-      decoration: BoxDecoration(
-        color: AppColors.bgDark.withValues(alpha: 0.65),
-        border: Border(
-          top: BorderSide(
-            color: AppColors.border.withValues(alpha: 0.5),
-            width: 1.0,
-          ),
-        ),
-      ),
-      child: ClipRRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 16.0, sigmaY: 16.0),
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: tabs.asMap().entries.map((e) {
-                  final i = e.key;
-                  final tab = e.value;
-                  final isSelected = i == selected;
-                  final isCenter = i == 2;
+    return SizedBox(
+      height: barHeight + bottomPadding + 36, // Allow height for the lifted FAB
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.bottomCenter,
+        children: [
+          // 1. The actual bottom nav bar (72px, dark background)
+          Container(
+            height: barHeight + bottomPadding,
+            decoration: const BoxDecoration(
+              color: AppColors.bgCard, // Color(0xFF0F0F1A)
+              border: Border(
+                top: BorderSide(
+                  color: AppColors.border, // Color(0xFF1C1C2E)
+                  width: 1.0,
+                ),
+              ),
+            ),
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: tabs.asMap().entries.map((e) {
+                    final i = e.key;
+                    final tab = e.value;
+                    final isSelected = i == selected;
+                    final isCenter = i == 2;
 
-                  if (isCenter) {
-                    return _CenterFab(onTap: () => onTap(i), isSelected: isSelected);
-                  }
+                    if (isCenter) {
+                      // Placeholder for the center FAB so it spaces properly
+                      return const SizedBox(width: 60);
+                    }
 
-                  return _NavTab(
-                    item: tab,
-                    isSelected: isSelected,
-                    onTap: () => onTap(i),
-                  );
-                }).toList(),
+                    return _NavTab(
+                      item: tab,
+                      isSelected: isSelected,
+                      onTap: () => onTap(i),
+                    );
+                  }).toList(),
+                ),
               ),
             ),
           ),
-        ),
+          // 2. Positioned FAB centered, bottom: 16px above bar (which is bottom: 36px total)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 36 + bottomPadding,
+            child: Center(
+              child: _CenterFab(
+                onTap: () => onTap(2),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -405,37 +392,31 @@ class _BottomNav extends StatelessWidget {
 
 class _CenterFab extends StatelessWidget {
   final VoidCallback onTap;
-  final bool isSelected;
-  const _CenterFab({required this.onTap, required this.isSelected});
+  const _CenterFab({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Transform.translate(
-      offset: const Offset(0, -18),
-      child: BounceOnTap(
-        onTap: onTap,
-        child: Container(
-          width: 62,
-          height: 62,
-          decoration: BoxDecoration(
-            gradient: AppColors.brandGradient,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.brand.withValues(alpha: 0.45),
-                blurRadius: 18,
-                spreadRadius: 2,
-                offset: const Offset(0, 6),
-              ),
-              BoxShadow(
-                color: AppColors.coral.withValues(alpha: 0.25),
-                blurRadius: 24,
-                spreadRadius: -2,
-              ),
-            ],
+    return BounceOnTap(
+      onTap: onTap,
+      child: Container(
+        width: 56,
+        height: 56,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: const LinearGradient(
+            colors: [AppColors.brand, AppColors.coral], // brand purple to coral
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
-          child: const Icon(Icons.add_rounded, color: Colors.white, size: 30),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.brand.withOpacity(0.5),
+              blurRadius: 20,
+              spreadRadius: 2,
+            ),
+          ],
         ),
+        child: const Icon(Icons.add, color: Colors.white, size: 28),
       ),
     );
   }
@@ -450,41 +431,36 @@ class _NavTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 64,
-      height: 64,
+      width: 60,
+      height: 60, // 60px touch target
       child: BounceOnTap(
         onTap: onTap,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOutCubic,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              decoration: BoxDecoration(
-                color: isSelected ? AppColors.brand.withValues(alpha: 0.12) : Colors.transparent,
-                borderRadius: BorderRadius.circular(100),
-              ),
-              child: AnimatedScale(
-                scale: isSelected ? 1.1 : 1.0,
-                duration: const Duration(milliseconds: 200),
-                child: Icon(
-                  isSelected ? item.activeIcon : item.icon,
-                  color: isSelected ? AppColors.brand : AppColors.textSecondary,
-                  size: 22,
-                ),
+            Icon(
+              isSelected ? item.activeIcon : item.icon,
+              color: isSelected ? AppColors.brand : AppColors.textMuted,
+              size: 22,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              item.label,
+              style: GoogleFonts.inter(
+                fontSize: 10,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                color: isSelected ? AppColors.brand : AppColors.textMuted,
               ),
             ),
-            const SizedBox(height: 3),
-            AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 200),
-              style: GoogleFonts.inter(
-                fontSize: 9.5,
-                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
-                color: isSelected ? AppColors.brand : AppColors.textMuted,
-                letterSpacing: 0.2,
+            const SizedBox(height: 2),
+            // small dot indicator below
+            Container(
+              width: 4,
+              height: 4,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isSelected ? AppColors.brand : Colors.transparent,
               ),
-              child: Text(item.label),
             ),
           ],
         ),

@@ -243,7 +243,18 @@ final levelProvider = StateNotifierProvider.family<LevelNotifier, LevelState, St
 
 /// Get a single level by ID across all loaded roadmaps
 final levelByIdProvider = Provider.family<LevelModel?, String>((ref, levelId) {
-  // Search all level providers — we look in mock data since roadmapId is embedded
+  // Search all dynamic roadmaps loaded in roadmapProvider
+  final roadmaps = ref.watch(roadmapProvider).roadmaps;
+  for (final r in roadmaps) {
+    final s = ref.watch(levelProvider(r.id));
+    try {
+      return s.levels.firstWhere((l) => l.id == levelId);
+    } catch (_) {
+      // not in this roadmap
+    }
+  }
+
+  // Fallback to mock roadmaps
   const roadmapIds = [
     'mock-roadmap-001',
     'mock-roadmap-002',
@@ -257,6 +268,7 @@ final levelByIdProvider = Provider.family<LevelModel?, String>((ref, levelId) {
       // not in this roadmap
     }
   }
+
   // fallback: parse from levelId pattern
   if (levelId.contains('-level-')) {
     final parts = levelId.split('-level-');

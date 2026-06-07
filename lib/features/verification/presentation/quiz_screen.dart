@@ -158,7 +158,9 @@ class _QuizScreenState extends ConsumerState<QuizScreen>
     final correct = _correctCount;
     if (correct >= (_q.length * 0.8).ceil()) {
       _confetti.play();
-      ref.read(levelProvider(widget.levelId.split('-level-').first).notifier)
+      final level = ref.read(levelByIdProvider(widget.levelId));
+      final roadmapId = level?.roadmapId ?? widget.levelId.split('-level-').first;
+      ref.read(levelProvider(roadmapId).notifier)
           .verifyAndCompleteLevel(
             levelId: widget.levelId,
             proofType: 'quiz',
