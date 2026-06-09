@@ -12,31 +12,10 @@ import '../../../models/user_model.dart';
 import '../../../shared/providers/auth_provider.dart';
 import '../../../shared/providers/roadmap_provider.dart';
 import '../../../shared/providers/dashboard_provider.dart';
-import '../../../shared/providers/level_provider.dart';
 import '../../../shared/widgets/premium_animations.dart';
 import '../../../shared/widgets/loading_shimmer.dart';
 
-// ─── Daily XP provider: sums xpReward of levels completed today ──
-// We read all roadmaps and their loaded levels to compute XP earned today.
-final dailyXpProvider = Provider<int>((ref) {
-  final roadmaps = ref.watch(roadmapProvider).roadmaps;
-  final today = DateTime.now();
-  int total = 0;
-  for (final r in roadmaps) {
-    final lvState = ref.watch(levelProvider(r.id));
-    for (final lvl in lvState.levels) {
-      if (lvl.isCompleted && lvl.completedAt != null) {
-        final ca = lvl.completedAt!;
-        if (ca.year == today.year &&
-            ca.month == today.month &&
-            ca.day == today.day) {
-          total += lvl.xpReward;
-        }
-      }
-    }
-  }
-  return total;
-});
+// ─── Daily XP: backed by SharedPreferences via todayXpProvider ──
 
 // ─── Dashboard Screen ─────────────────────────────────────────
 class DashboardScreen extends ConsumerStatefulWidget {
@@ -58,7 +37,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final user = ref.watch(currentUserProvider);
     final dashboardState = ref.watch(dashboardProvider);
     final roadmaps = ref.watch(activeRoadmapsProvider);
-    final dailyXp = ref.watch(dailyXpProvider);
+    final dailyXp = ref.watch(todayXpProvider);
     final now = DateTime.now();
 
     return Scaffold(

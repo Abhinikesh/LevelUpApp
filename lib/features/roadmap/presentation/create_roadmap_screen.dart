@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
@@ -54,6 +56,7 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
 
   // AI Loading & Preview States
   bool _isGeneratingAI = false;
+  bool _isCreating = false; // Separate from provider isLoading for button UX
   int _loadingMsgIdx = 0;
   Timer? _loadingTimer;
   List<Map<String, dynamic>>? _generatedLevelsPreview;
@@ -124,84 +127,121 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
     if (picked != null) setState(() => _deadline = picked);
   }
 
-  // Generate with client fallback
-  List<Map<String, dynamic>> _generateSmartRoadmap(String title, String description, String type) {
+  // ── Generate with full templates + OpenAI fallback ──────────
+  List<Map<String, dynamic>> _generateSmartRoadmap(
+      String title, String description, String type) {
     final lowerTitle = title.toLowerCase();
     final lowerDesc = description.toLowerCase();
-    
-    List<String> titles;
-    String defaultProof = 'quiz';
-    
-    if (type == 'study' && (lowerTitle.contains('dsa') || lowerTitle.contains('data structure') || lowerDesc.contains('algorithm'))) {
-      titles = [
-        'Arrays & Slicing',
-        'Strings & Pattern Matching',
-        'Linked Lists',
-        'Stacks & Queues',
-        'Trees & Recursion',
-        'Graphs & Traversals (DFS/BFS)',
-        'Heaps & Priority Queues',
-        'Dynamic Programming Foundations',
-        'Sorting & Searching Algorithms',
-        'Final Project: Optimized System Design'
+
+    List<Map<String, dynamic>> levels;
+
+    // ── DSA / Data Structures ──
+    if (type == 'study' &&
+        (lowerTitle.contains('dsa') ||
+            lowerTitle.contains('data struct') ||
+            lowerTitle.contains('algorithm') ||
+            lowerDesc.contains('algorithm') ||
+            lowerDesc.contains('leetcode'))) {
+      levels = [
+        {'levelNumber': 1, 'title': 'Arrays & Slicing', 'description': 'Master 1-D and 2-D arrays, index tricks, prefix sums, and the two-pointer pattern.', 'proofType': 'quiz', 'estimatedMinutes': 45, 'xpReward': 100},
+        {'levelNumber': 2, 'title': 'Strings & Pattern Matching', 'description': 'Sliding window, anagram checks, palindrome detection, and KMP basics.', 'proofType': 'quiz', 'estimatedMinutes': 45, 'xpReward': 100},
+        {'levelNumber': 3, 'title': 'Linked Lists', 'description': 'Singly/doubly linked lists, fast-slow pointers, cycle detection, reversal.', 'proofType': 'quiz', 'estimatedMinutes': 50, 'xpReward': 100},
+        {'levelNumber': 4, 'title': 'Stacks & Queues', 'description': 'Monotonic stacks, queue using stacks, sliding window maximum.', 'proofType': 'quiz', 'estimatedMinutes': 45, 'xpReward': 100},
+        {'levelNumber': 5, 'title': 'Binary Search & Variants', 'description': 'Classic binary search, search rotated array, find peak element, search range.', 'proofType': 'quiz', 'estimatedMinutes': 50, 'xpReward': 150},
+        {'levelNumber': 6, 'title': 'Trees & Recursion', 'description': 'BST operations, DFS traversals, LCA, height, diameter, and path sums.', 'proofType': 'quiz', 'estimatedMinutes': 60, 'xpReward': 150},
+        {'levelNumber': 7, 'title': 'Graphs — BFS & DFS', 'description': 'Adjacency list/matrix, connected components, topological sort, cycle detection.', 'proofType': 'quiz', 'estimatedMinutes': 60, 'xpReward': 150},
+        {'levelNumber': 8, 'title': 'Heaps & Priority Queues', 'description': 'Min/max heap ops, K largest elements, merge K sorted lists, task scheduler.', 'proofType': 'quiz', 'estimatedMinutes': 50, 'xpReward': 150},
+        {'levelNumber': 9, 'title': 'Dynamic Programming I — 1D', 'description': 'Fibonacci, climbing stairs, house robber, coin change, longest increasing subsequence.', 'proofType': 'quiz', 'estimatedMinutes': 70, 'xpReward': 200},
+        {'levelNumber': 10, 'title': 'Dynamic Programming II — 2D', 'description': 'Grid DP, edit distance, knapsack 0/1, partition equal subset sum.', 'proofType': 'quiz', 'estimatedMinutes': 75, 'xpReward': 200},
+        {'levelNumber': 11, 'title': 'Sorting Deep Dive', 'description': 'Merge sort, quick sort, counting sort, custom comparators, sort colors.', 'proofType': 'quiz', 'estimatedMinutes': 45, 'xpReward': 100},
+        {'levelNumber': 12, 'title': 'Final Challenge: Mock Interview', 'description': 'Time-boxed set of 5 mixed-difficulty problems. Prove mastery under pressure.', 'proofType': 'code', 'estimatedMinutes': 90, 'xpReward': 300},
       ];
-      defaultProof = 'quiz';
-    } else if (type == 'study') {
-      titles = [
-        'Foundations of $title',
-        'Core Terminology & Concepts',
-        'Basic Practical Application',
-        'Intermediate Techniques',
-        'Deep Dive & Advanced Methods',
-        'Common Mistakes & Best Practices',
-        'Real-world Case Studies',
-        'Final Knowledge Assessment'
-      ];
-      defaultProof = 'quiz';
-    } else if (type == 'gym') {
-      titles = [
-        'Week 1: Form & Mobility Foundations',
-        'Week 2: Base Volume Conditioning',
-        'Week 3: Progressive Overload & Intensity',
-        'Week 4: Peak Work Capacity',
-        'Week 5: Active Recovery & Deload',
-        'Week 6: Final Strength & Endurance Test'
-      ];
-      defaultProof = 'timer';
-    } else if (type == 'work') {
-      titles = [
-        'Milestone 1: Project Alignment & Setup',
-        'Milestone 2: Prototype Architecture Design',
-        'Milestone 3: Core Database Schema & Entities',
-        'Milestone 4: Core API Development & Integration',
-        'Milestone 5: Frontend UI Component Scaffold',
-        'Milestone 6: API Wiring & Core User Flow',
-        'Milestone 7: Test Coverage & Edge Cases',
-        'Milestone 8: Live Deployment & Launch'
-      ];
-      defaultProof = 'code';
-    } else {
-      titles = [
-        'Introduction to $title',
-        'Core Principles of the Topic',
-        'Hands-on Practical Exercises',
-        'Advanced Strategies & Insights',
-        'Final Showcase Project'
-      ];
-      defaultProof = 'code';
     }
-    
-    return List.generate(titles.length, (index) {
-      final num = index + 1;
-      return {
-        'levelNumber': num,
-        'title': titles[index],
-        'description': 'Master this level by completing the required validation for ${titles[index]}.',
-        'proofType': defaultProof,
-        'estimatedMinutes': 45 + (index % 3) * 15,
-        'xpReward': 100 + (index % 3) * 50,
-      };
-    });
+    // ── Web / React ──
+    else if (type == 'study' &&
+        (lowerTitle.contains('react') ||
+            lowerTitle.contains('web') ||
+            lowerTitle.contains('frontend') ||
+            lowerTitle.contains('next') ||
+            lowerDesc.contains('react') ||
+            lowerDesc.contains('javascript'))) {
+      levels = [
+        {'levelNumber': 1, 'title': 'HTML & Semantic Structure', 'description': 'Forms, accessibility, semantic HTML5 elements, and valid markup.', 'proofType': 'quiz', 'estimatedMinutes': 40, 'xpReward': 100},
+        {'levelNumber': 2, 'title': 'CSS & Layouts', 'description': 'Flexbox, CSS Grid, responsive design, custom properties, animations.', 'proofType': 'quiz', 'estimatedMinutes': 50, 'xpReward': 100},
+        {'levelNumber': 3, 'title': 'JavaScript Essentials', 'description': 'ES6+, closures, promises, async/await, event loop, DOM manipulation.', 'proofType': 'quiz', 'estimatedMinutes': 60, 'xpReward': 150},
+        {'levelNumber': 4, 'title': 'React Foundations', 'description': 'JSX, components, props, state, lifecycle with hooks (useState, useEffect).', 'proofType': 'code', 'estimatedMinutes': 60, 'xpReward': 150},
+        {'levelNumber': 5, 'title': 'State Management', 'description': 'Context API, useReducer, Zustand/Redux basics — when to use which.', 'proofType': 'code', 'estimatedMinutes': 60, 'xpReward': 150},
+        {'levelNumber': 6, 'title': 'API Integration & Data Fetching', 'description': 'fetch, axios, React Query — loading states, error boundaries, caching.', 'proofType': 'code', 'estimatedMinutes': 60, 'xpReward': 150},
+        {'levelNumber': 7, 'title': 'Performance & Optimization', 'description': 'useMemo, useCallback, code splitting, lazy loading, Core Web Vitals.', 'proofType': 'quiz', 'estimatedMinutes': 45, 'xpReward': 200},
+        {'levelNumber': 8, 'title': 'Final Project: Full-stack Feature', 'description': 'Build and ship a complete user-facing feature end-to-end. Deploy on Vercel.', 'proofType': 'code', 'estimatedMinutes': 90, 'xpReward': 300},
+      ];
+    }
+    // ── Python ──
+    else if (type == 'study' &&
+        (lowerTitle.contains('python') ||
+            lowerDesc.contains('python') ||
+            lowerTitle.contains('data science') ||
+            lowerTitle.contains('machine learn'))) {
+      levels = [
+        {'levelNumber': 1, 'title': 'Python Fundamentals', 'description': 'Variables, data types, control flow, functions, list comprehensions, f-strings.', 'proofType': 'quiz', 'estimatedMinutes': 40, 'xpReward': 100},
+        {'levelNumber': 2, 'title': 'OOP & Modules', 'description': 'Classes, inheritance, dunder methods, modules, packages, and virtual environments.', 'proofType': 'quiz', 'estimatedMinutes': 50, 'xpReward': 100},
+        {'levelNumber': 3, 'title': 'Data Structures in Python', 'description': 'lists, dicts, sets, tuples, collections module — time complexity of each.', 'proofType': 'quiz', 'estimatedMinutes': 45, 'xpReward': 100},
+        {'levelNumber': 4, 'title': 'File I/O & APIs', 'description': 'Reading/writing files, JSON, CSV, requests library, REST API calls.', 'proofType': 'code', 'estimatedMinutes': 45, 'xpReward': 150},
+        {'levelNumber': 5, 'title': 'NumPy & Pandas', 'description': 'Array ops, DataFrame manipulation, groupby, merge, vectorization.', 'proofType': 'code', 'estimatedMinutes': 60, 'xpReward': 150},
+        {'levelNumber': 6, 'title': 'Data Visualization', 'description': 'Matplotlib, Seaborn — histograms, scatter plots, heatmaps, dashboards.', 'proofType': 'code', 'estimatedMinutes': 50, 'xpReward': 150},
+        {'levelNumber': 7, 'title': 'Machine Learning Basics', 'description': 'Scikit-learn — train/test split, linear regression, classification, evaluation metrics.', 'proofType': 'quiz', 'estimatedMinutes': 70, 'xpReward': 200},
+        {'levelNumber': 8, 'title': 'Final Project: End-to-end ML Pipeline', 'description': 'Collect data, preprocess, train a model, evaluate, and present findings.', 'proofType': 'code', 'estimatedMinutes': 90, 'xpReward': 300},
+      ];
+    }
+    // ── Gym / Fitness ──
+    else if (type == 'gym') {
+      levels = [
+        {'levelNumber': 1, 'title': 'Week 1: Form & Mobility Foundations', 'description': 'Learn perfect form for squat, deadlift, bench, and overhead press. Focus on range of motion.', 'proofType': 'timer', 'estimatedMinutes': 50, 'xpReward': 100},
+        {'levelNumber': 2, 'title': 'Week 2: Base Volume Conditioning', 'description': 'Full-body 3×10 protocol. Build base volume tolerance. Active recovery on rest days.', 'proofType': 'timer', 'estimatedMinutes': 55, 'xpReward': 100},
+        {'levelNumber': 3, 'title': 'Week 3: Progressive Overload Introduction', 'description': 'Add 5% load to each compound lift. Track every set and rep. Introduce supersets.', 'proofType': 'timer', 'estimatedMinutes': 60, 'xpReward': 150},
+        {'levelNumber': 4, 'title': 'Week 4: Peak Work Capacity', 'description': 'High-volume push/pull/legs split. Prioritize mind-muscle connection.', 'proofType': 'timer', 'estimatedMinutes': 65, 'xpReward': 150},
+        {'levelNumber': 5, 'title': 'Week 5: Active Recovery & Deload', 'description': 'Cut volume 40%. Focus on mobility work, sleep, and nutrition. Let muscles recover.', 'proofType': 'timer', 'estimatedMinutes': 40, 'xpReward': 100},
+        {'levelNumber': 6, 'title': 'Week 6: Final Strength & Endurance Test', 'description': '1-rep max attempt on squats/bench/deadlift. Timed 2-mile run. Document transformation.', 'proofType': 'timer', 'estimatedMinutes': 75, 'xpReward': 300},
+      ];
+    }
+    // ── Work / Career ──
+    else if (type == 'work') {
+      levels = [
+        {'levelNumber': 1, 'title': 'Milestone 1: Project Alignment & Discovery', 'description': 'Define success metrics, stakeholders, and constraints. Write a 1-pager PRD.', 'proofType': 'code', 'estimatedMinutes': 60, 'xpReward': 100},
+        {'levelNumber': 2, 'title': 'Milestone 2: Architecture & Tech Stack', 'description': 'Choose stack, draw system diagram, evaluate trade-offs. Write ADRs.', 'proofType': 'code', 'estimatedMinutes': 60, 'xpReward': 100},
+        {'levelNumber': 3, 'title': 'Milestone 3: Database Schema & Models', 'description': 'Design ERD, write migrations, seed data. Validate relationships and indexes.', 'proofType': 'code', 'estimatedMinutes': 60, 'xpReward': 150},
+        {'levelNumber': 4, 'title': 'Milestone 4: Core API Development', 'description': 'Implement CRUD endpoints, auth middleware, input validation, error handling.', 'proofType': 'code', 'estimatedMinutes': 90, 'xpReward': 200},
+        {'levelNumber': 5, 'title': 'Milestone 5: Frontend UI Scaffold', 'description': 'Build component library, routing, global state setup, design tokens.', 'proofType': 'code', 'estimatedMinutes': 90, 'xpReward': 200},
+        {'levelNumber': 6, 'title': 'Milestone 6: API Wiring & Core User Flows', 'description': 'Connect frontend to backend. Implement the 3 primary user journeys end-to-end.', 'proofType': 'code', 'estimatedMinutes': 90, 'xpReward': 200},
+        {'levelNumber': 7, 'title': 'Milestone 7: Tests & Edge Cases', 'description': 'Unit tests, integration tests, error boundary coverage. Achieve 80%+ coverage.', 'proofType': 'code', 'estimatedMinutes': 75, 'xpReward': 150},
+        {'levelNumber': 8, 'title': 'Milestone 8: Deployment & Launch', 'description': 'CI/CD pipeline, production deploy, monitoring setup. Write launch announcement.', 'proofType': 'code', 'estimatedMinutes': 90, 'xpReward': 300},
+      ];
+    }
+    // ── Custom ──
+    else if (type == 'custom') {
+      levels = [
+        {'levelNumber': 1, 'title': 'Introduction to $title', 'description': 'Lay the groundwork. Understand the core purpose, tools needed, and your starting point.', 'proofType': 'quiz', 'estimatedMinutes': 30, 'xpReward': 100},
+        {'levelNumber': 2, 'title': 'Core Concepts & Principles', 'description': 'Deep-dive into the foundational theory behind $title.', 'proofType': 'quiz', 'estimatedMinutes': 45, 'xpReward': 100},
+        {'levelNumber': 3, 'title': 'Hands-on Practice', 'description': 'Apply what you have learned in a real, low-stakes environment.', 'proofType': 'code', 'estimatedMinutes': 60, 'xpReward': 150},
+        {'levelNumber': 4, 'title': 'Advanced Strategies', 'description': 'Level up with nuanced techniques and edge cases for $title.', 'proofType': 'quiz', 'estimatedMinutes': 60, 'xpReward': 200},
+        {'levelNumber': 5, 'title': 'Final Showcase Project', 'description': 'Demonstrate your mastery through a polished deliverable.', 'proofType': 'code', 'estimatedMinutes': 90, 'xpReward': 300},
+      ];
+    }
+    // ── Generic Study fallback ──
+    else {
+      levels = [
+        {'levelNumber': 1, 'title': 'Foundations of $title', 'description': 'Survey the landscape — key terms, history, and why it matters.', 'proofType': 'quiz', 'estimatedMinutes': 40, 'xpReward': 100},
+        {'levelNumber': 2, 'title': 'Core Terminology & Concepts', 'description': 'Build your mental model with the 20% of ideas that explain 80% of the domain.', 'proofType': 'quiz', 'estimatedMinutes': 45, 'xpReward': 100},
+        {'levelNumber': 3, 'title': 'Basic Practical Application', 'description': 'Transfer knowledge into action — guided exercises with feedback.', 'proofType': 'code', 'estimatedMinutes': 50, 'xpReward': 100},
+        {'levelNumber': 4, 'title': 'Intermediate Techniques', 'description': 'Tackle more complex scenarios that require combining ideas from earlier levels.', 'proofType': 'quiz', 'estimatedMinutes': 55, 'xpReward': 150},
+        {'levelNumber': 5, 'title': 'Deep Dive & Advanced Methods', 'description': 'Explore the expert-level nuances that separate professionals from beginners.', 'proofType': 'quiz', 'estimatedMinutes': 60, 'xpReward': 200},
+        {'levelNumber': 6, 'title': 'Common Mistakes & Best Practices', 'description': 'Study the most frequent failure modes and how to avoid them.', 'proofType': 'quiz', 'estimatedMinutes': 40, 'xpReward': 150},
+        {'levelNumber': 7, 'title': 'Real-world Case Studies', 'description': 'Analyse 3 real examples of $title applied at scale. Extract lessons.', 'proofType': 'quiz', 'estimatedMinutes': 50, 'xpReward': 150},
+        {'levelNumber': 8, 'title': 'Final Knowledge Assessment', 'description': 'Comprehensive quiz + short written answer. Prove you own this topic.', 'proofType': 'quiz', 'estimatedMinutes': 45, 'xpReward': 200},
+      ];
+    }
+
+    return levels;
   }
 
   Future<void> _generateAI() async {
@@ -226,45 +266,100 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
     });
 
     try {
-      final dio = ref.read(roadmapProvider.notifier).dio;
-      final response = await dio.post(
-        '/ai/generate-roadmap',
-        data: {
-          'title': title,
-          'description': _aiGoalDescCtrl.text.trim(),
-          'type': _selectedType,
-        },
-      );
-      
-      final data = response.data;
-      List<Map<String, dynamic>> levels = [];
-      if (data is Map && data['levels'] is List) {
-        levels = List<Map<String, dynamic>>.from(data['levels']);
-      } else {
-        throw Exception("Invalid levels response");
+      // ── Check for user-stored OpenAI API key ─────────────────
+      final prefs = await SharedPreferences.getInstance();
+      final apiKey = prefs.getString('openai_api_key') ?? '';
+
+      if (apiKey.isNotEmpty) {
+        // ── Real OpenAI call ──────────────────────────────────
+        final openAiDio = Dio(BaseOptions(
+          connectTimeout: const Duration(seconds: 20),
+          receiveTimeout: const Duration(seconds: 30),
+        ));
+        final prompt = '''
+You are a professional learning-path designer. Create a structured roadmap for: "$title".
+Description/context: "${_aiGoalDescCtrl.text.trim()}".
+Type: $_selectedType.
+
+Return ONLY valid JSON with this exact shape — no markdown, no explanation:
+{
+  "levels": [
+    {
+      "levelNumber": 1,
+      "title": "...",
+      "description": "...",
+      "proofType": "quiz|timer|code",
+      "estimatedMinutes": 45,
+      "xpReward": 100
+    }
+  ]
+}
+
+Rules:
+- Between 6 and 12 levels
+- Titles must be specific and actionable (no generic "Introduction" alone)
+- proofType: quiz for theory, code for coding tasks, timer for physical/time-based tasks
+- xpReward: 100 for easy, 150 for medium, 200-300 for hard/final levels
+''';
+        final aiResponse = await openAiDio.post(
+          'https://api.openai.com/v1/chat/completions',
+          options: Options(
+            headers: {
+              'Authorization': 'Bearer $apiKey',
+              'Content-Type': 'application/json',
+            },
+          ),
+          data: {
+            'model': 'gpt-4o-mini',
+            'messages': [
+              {'role': 'system', 'content': 'You are a concise JSON-only API. Return only valid JSON.'},
+              {'role': 'user', 'content': prompt},
+            ],
+            'temperature': 0.7,
+            'max_tokens': 2000,
+          },
+        );
+        final content = aiResponse.data['choices'][0]['message']['content'] as String;
+        // Strip possible markdown code fences
+        final cleaned = content
+            .replaceAll('```json', '')
+            .replaceAll('```', '')
+            .trim();
+        final parsed = jsonDecode(cleaned) as Map<String, dynamic>;
+        final levels = (parsed['levels'] as List<dynamic>)
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+
+        setState(() {
+          _isGeneratingAI = false;
+          _generatedLevelsPreview = levels;
+          _clearPreviewControllers();
+          for (final lvl in levels) {
+            _previewControllers
+                .add(TextEditingController(text: lvl['title']));
+          }
+        });
+        return;
       }
 
-      setState(() {
-        _isGeneratingAI = false;
-        _generatedLevelsPreview = levels;
-        _clearPreviewControllers();
-        for (final lvl in levels) {
-          _previewControllers.add(TextEditingController(text: lvl['title']));
-        }
-      });
+      // ── No API key: use smart local templates ─────────────
+      throw Exception('no_key');
     } catch (_) {
-      // Fallback client-side template
-      await Future.delayed(const Duration(milliseconds: 2500)); // Simulating latency
-      final levels = _generateSmartRoadmap(title, _aiGoalDescCtrl.text.trim(), _selectedType);
-      
-      setState(() {
-        _isGeneratingAI = false;
-        _generatedLevelsPreview = levels;
-        _clearPreviewControllers();
-        for (final lvl in levels) {
-          _previewControllers.add(TextEditingController(text: lvl['title']));
-        }
-      });
+      // Fallback: local template with short simulated delay
+      await Future.delayed(const Duration(milliseconds: 800));
+      final levels = _generateSmartRoadmap(
+        title, _aiGoalDescCtrl.text.trim(), _selectedType);
+      if (mounted) {
+        setState(() {
+          _isGeneratingAI = false;
+          _generatedLevelsPreview = levels;
+          _clearPreviewControllers();
+          for (final lvl in levels) {
+            _previewControllers
+                .add(TextEditingController(text: lvl['title'] as String));
+          }
+        });
+      }
     } finally {
       _loadingTimer?.cancel();
     }
@@ -272,11 +367,12 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
 
   Future<void> _saveAI() async {
     if (_generatedLevelsPreview == null) return;
-    
+    setState(() => _isCreating = true);
+
     final title = _aiGoalTitleCtrl.text.trim();
     final description = _aiGoalDescCtrl.text.trim();
-    
-    // Read updated level titles
+
+    // Read updated level titles from preview controllers
     final List<Map<String, dynamic>> finalizedLevels = [];
     for (int i = 0; i < _generatedLevelsPreview!.length; i++) {
       final item = Map<String, dynamic>.from(_generatedLevelsPreview![i]);
@@ -286,19 +382,25 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
 
     final payload = {
       'title': title,
-      'description': description.isNotEmpty ? description : 'AI generated roadmap for $title',
+      'description': description.isNotEmpty
+          ? description
+          : 'AI generated roadmap for $title',
       'type': _selectedType,
       'source': 'ai',
       'examMode': false,
       'levels': finalizedLevels,
     };
 
-    final roadmap = await ref.read(roadmapProvider.notifier).createRoadmap(payload);
-    if (roadmap != null && mounted) {
+    final roadmap =
+        await ref.read(roadmapProvider.notifier).createRoadmap(payload);
+    if (!mounted) return;
+    if (roadmap != null) {
       context.go('${AppRoutes.map}/${roadmap.id}');
-    } else if (mounted) {
+    } else {
+      setState(() => _isCreating = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to save roadmap. Please try again.')),
+        const SnackBar(
+            content: Text('Failed to save roadmap. Please try again.')),
       );
     }
   }
@@ -315,7 +417,10 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
       return;
     }
 
-    setState(() => _titleError = '');
+    setState(() {
+      _titleError = '';
+      _isCreating = true;
+    });
 
     // Format levels
     final levelsPayload = _manualLevels.asMap().entries.map((entry) {
@@ -343,19 +448,33 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
       'levels': levelsPayload,
     };
 
-    final roadmap = await ref.read(roadmapProvider.notifier).createRoadmap(payload);
-    if (roadmap != null && mounted) {
+    final roadmap =
+        await ref.read(roadmapProvider.notifier).createRoadmap(payload);
+    if (!mounted) return;
+    if (roadmap != null) {
       context.go('${AppRoutes.map}/${roadmap.id}');
-    } else if (mounted) {
+    } else {
+      setState(() => _isCreating = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to create roadmap. Please try again.')),
+        const SnackBar(
+            content: Text('Failed to create roadmap. Please try again.')),
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final isLoading = ref.watch(roadmapProvider).isLoading;
+    // Use local _isCreating instead of provider isLoading for button state
+    // so only the tapped button spins, not every button on the page.
+    final roadmapState = ref.watch(roadmapProvider);
+    // Re-use provider error if needed
+    if (roadmapState.error != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_isCreating) {
+          ref.read(roadmapProvider.notifier).clearError();
+        }
+      });
+    }
 
     if (_isGeneratingAI) {
       return Scaffold(
@@ -408,12 +527,17 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Customize your milestone titles below before creating:',
-                    style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary)),
+                    style: GoogleFonts.inter(
+                        fontSize: 14, color: AppColors.textSecondary)),
                 const SizedBox(height: 16),
                 Expanded(
                   child: ListView.builder(
                     itemCount: _generatedLevelsPreview!.length,
                     itemBuilder: (ctx, index) {
+                      final lvl = _generatedLevelsPreview![index];
+                      final proof = lvl['proofType'] as String? ?? 'quiz';
+                      final xp = lvl['xpReward'] as int? ?? 100;
+                      final mins = lvl['estimatedMinutes'] as int? ?? 45;
                       return Container(
                         margin: const EdgeInsets.only(bottom: 12),
                         padding: const EdgeInsets.all(12),
@@ -426,10 +550,11 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
                           children: [
                             CircleAvatar(
                               radius: 16,
-                              backgroundColor: AppColors.brand.withOpacity(0.2),
+                              backgroundColor:
+                                  AppColors.brand.withOpacity(0.2),
                               child: Text(
                                 '${index + 1}',
-                                style: GoogleFonts.syne(
+                                style: GoogleFonts.spaceGrotesk(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w800,
                                   color: AppColors.brand,
@@ -438,14 +563,32 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
                             ),
                             const SizedBox(width: 12),
                             Expanded(
-                              child: TextField(
-                                controller: _previewControllers[index],
-                                style: GoogleFonts.inter(fontSize: 14, color: Colors.white),
-                                decoration: const InputDecoration(
-                                  border: InputBorder.none,
-                                  isDense: true,
-                                  contentPadding: EdgeInsets.zero,
-                                ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  TextField(
+                                    controller: _previewControllers[index],
+                                    style: GoogleFonts.inter(
+                                        fontSize: 14, color: Colors.white),
+                                    decoration: const InputDecoration(
+                                      border: InputBorder.none,
+                                      isDense: true,
+                                      contentPadding: EdgeInsets.zero,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      Text(
+                                        '$proof • ${mins}m • $xp XP',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 11,
+                                          color: AppColors.textMuted,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ),
                             ),
                           ],
@@ -456,9 +599,9 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
                 ),
                 const SizedBox(height: 16),
                 StepUpButton(
-                  label: 'Save & Start Roadmap Map 🚀',
-                  isLoading: isLoading,
-                  onPressed: _saveAI,
+                  label: _isCreating ? 'Saving Roadmap...' : 'Save & Start Roadmap Map 🚀',
+                  isLoading: _isCreating,
+                  onPressed: _isCreating ? null : _saveAI,
                 ),
               ],
             ),
@@ -722,9 +865,9 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
 
                 const SizedBox(height: AppSpacing.xxxl),
                 StepUpButton(
-                  label: 'Create Roadmap Map 🚀',
-                  isLoading: isLoading,
-                  onPressed: _createManual,
+                  label: _isCreating ? 'Creating Roadmap...' : 'Create Roadmap Map 🚀',
+                  isLoading: _isCreating,
+                  onPressed: _isCreating ? null : _createManual,
                 ).animate().fadeIn(delay: 350.ms),
               ],
             ),
@@ -737,27 +880,90 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: AppSpacing.md),
-                Container(
-                  padding: const EdgeInsets.all(AppSpacing.base),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF1A1040), Color(0xFF12121A)],
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.brand.withOpacity(0.3)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Text('✨', style: TextStyle(fontSize: 28)),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        child: Text(
-                          'Describe your goal, timeline, and current level. Our AI will automatically construct a customized learning path.',
-                          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                // AI key status banner
+                FutureBuilder<String>(
+                  future: SharedPreferences.getInstance().then(
+                    (prefs) => prefs.getString('openai_api_key') ?? ''),
+                  builder: (ctx, snap) {
+                    final hasKey =
+                        (snap.data ?? '').isNotEmpty;
+                    return Container(
+                      padding: const EdgeInsets.all(AppSpacing.base),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: hasKey
+                              ? [
+                                  const Color(0xFF0D2B1A),
+                                  const Color(0xFF12121A)
+                                ]
+                              : [
+                                  const Color(0xFF1A1040),
+                                  const Color(0xFF12121A)
+                                ],
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: hasKey
+                              ? AppColors.green.withOpacity(0.4)
+                              : AppColors.brand.withOpacity(0.3),
                         ),
                       ),
-                    ],
-                  ),
+                      child: Row(
+                        children: [
+                          Text(
+                            hasKey ? '✅' : '✨',
+                            style: const TextStyle(fontSize: 24),
+                          ),
+                          const SizedBox(width: AppSpacing.md),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  hasKey
+                                      ? 'OpenAI API active'
+                                      : 'Smart Local Generation',
+                                  style: GoogleFonts.spaceMono(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: hasKey
+                                        ? AppColors.green
+                                        : AppColors.textPrimary,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  hasKey
+                                      ? 'Your OpenAI key will generate a custom roadmap.'
+                                      : 'No API key? No problem — expert templates built in. Add key in Settings for real AI.',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                                if (!hasKey) ...
+                                  [
+                                    const SizedBox(height: 6),
+                                    GestureDetector(
+                                      onTap: () =>
+                                          context.push(AppRoutes.settings),
+                                      child: Text(
+                                        'Add OpenAI key →',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.brand,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 StepUpInput(
@@ -808,8 +1014,8 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
                 const SizedBox(height: AppSpacing.xxxl),
                 StepUpButton(
                   label: 'Generate with AI ✨',
-                  isLoading: isLoading,
-                  onPressed: _generateAI,
+                  isLoading: _isGeneratingAI,
+                  onPressed: _isGeneratingAI ? null : _generateAI,
                 ),
               ],
             ),

@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/network/api_interceptors.dart';
 import '../../core/network/dio_client.dart';
@@ -94,11 +96,43 @@ class RoadmapNotifier extends StateNotifier<RoadmapState> {
 
   Dio get dio => _dio;
 
-  RoadmapNotifier(this._dio) : super(const RoadmapState());
+  RoadmapNotifier(this._dio) : super(const RoadmapState()) {
+    _restoreFromPrefsCache();
+  }
 
   bool get _isMockMode =>
       ApiConstants.baseUrl.contains('your-backend') ||
       ApiConstants.baseUrl.isEmpty;
+
+  static const _prefsKey = 'cached_roadmaps';
+
+  // ── Restore from SharedPreferences on startup (instant display) ──
+
+  Future<void> _restoreFromPrefsCache() async {
+    if (_isMockMode || state.hasLoaded) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cached = prefs.getString(_prefsKey);
+      if (cached != null) {
+        final list = (jsonDecode(cached) as List<dynamic>)
+            .map((j) => RoadmapModel.fromJson(j as Map<String, dynamic>))
+            .toList();
+        if (list.isNotEmpty && !state.hasLoaded) {
+          state = state.copyWith(roadmaps: list, hasLoaded: true);
+        }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _writeToPrefsCache(List<RoadmapModel> roadmaps) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _prefsKey,
+        jsonEncode(roadmaps.map((r) => r.toJson()).toList()),
+      );
+    } catch (_) {}
+  }
 
   // ── Fetch all roadmaps ────────────────────────────────────────
 
@@ -119,7 +153,7 @@ class RoadmapNotifier extends StateNotifier<RoadmapState> {
       return;
     }
 
-    // Load from local cache first for instant display
+    // Load from local SQLite cache first for instant display
     if (!forceRefresh && !state.hasLoaded) {
       final cached = await LocalDatabase.getAllRoadmaps();
       if (cached.isNotEmpty) {
@@ -147,10 +181,11 @@ class RoadmapNotifier extends StateNotifier<RoadmapState> {
           .map((j) => RoadmapModel.fromJson(j as Map<String, dynamic>))
           .toList();
 
-      // Cache each roadmap locally
+      // Cache to SQLite and SharedPreferences
       for (final r in roadmaps) {
         await LocalDatabase.saveRoadmap(r);
       }
+      unawaited(_writeToPrefsCache(roadmaps));
 
       state = state.copyWith(
         roadmaps: roadmaps,
@@ -168,10 +203,34 @@ class RoadmapNotifier extends StateNotifier<RoadmapState> {
     }
   }
 
-  // ── Create roadmap ────────────────────────────────────────────
+  // ── Create roadmap (optimistic) ───────────────────────────────
 
   Future<RoadmapModel?> createRoadmap(Map<String, dynamic> payload) async {
-    state = state.copyWith(isLoading: true, error: null);
+    // ── Optimistic insert: build a temporary placeholder ─────────
+    final tempId = 'temp-${DateTime.now().millisecondsSinceEpoch}';
+    final optimisticRoadmap = RoadmapModel(
+      id: tempId,
+      userId: '',
+      title: payload['title'] as String? ?? 'New Roadmap',
+      description: payload['description'] as String? ?? '',
+      type: payload['type'] as String? ?? 'custom',
+      source: payload['source'] as String? ?? 'manual',
+      totalLevels: (payload['levels'] as List?)?.length ?? 1,
+      currentLevel: 1,
+      createdAt: DateTime.now(),
+      coverEmoji: null,
+      totalXpReward: 0,
+      xpEarned: 0,
+    );
+
+    // Insert immediately into state so the UI is instant
+    final previousRoadmaps = state.roadmaps;
+    state = state.copyWith(
+      roadmaps: [optimisticRoadmap, ...state.roadmaps],
+      isLoading: true,
+      error: null,
+    );
+
     try {
       final response = await _dio.post(ApiConstants.roadmaps, data: payload);
       final data = response.data as Map<String, dynamic>;
@@ -181,17 +240,31 @@ class RoadmapNotifier extends StateNotifier<RoadmapState> {
 
       await LocalDatabase.saveRoadmap(roadmap);
 
+      // Replace optimistic placeholder with real server data
+      final updatedList = state.roadmaps
+          .where((r) => r.id != tempId)
+          .toList();
+      final finalList = [roadmap, ...updatedList];
+
+      unawaited(_writeToPrefsCache(finalList));
+
       state = state.copyWith(
-        roadmaps: [roadmap, ...state.roadmaps],
+        roadmaps: finalList,
         isLoading: false,
       );
       return roadmap;
     } on DioException catch (e) {
-      final ex = ApiException.fromDioError(e);
-      state = state.copyWith(isLoading: false, error: ex.message);
+      // Rollback optimistic insert
+      state = state.copyWith(
+        roadmaps: previousRoadmaps,
+        isLoading: false,
+        error: ApiException.fromDioError(e).message,
+      );
       return null;
     } catch (e) {
+      // Rollback optimistic insert
       state = state.copyWith(
+        roadmaps: previousRoadmaps,
         isLoading: false,
         error: 'Failed to create roadmap.',
       );
@@ -205,9 +278,9 @@ class RoadmapNotifier extends StateNotifier<RoadmapState> {
     try {
       await _dio.delete(ApiConstants.roadmapById(id));
       await LocalDatabase.deleteRoadmap(id);
-      state = state.copyWith(
-        roadmaps: state.roadmaps.where((r) => r.id != id).toList(),
-      );
+      final updated = state.roadmaps.where((r) => r.id != id).toList();
+      state = state.copyWith(roadmaps: updated);
+      unawaited(_writeToPrefsCache(updated));
       return true;
     } on DioException catch (e) {
       final ex = ApiException.fromDioError(e);
@@ -226,6 +299,7 @@ class RoadmapNotifier extends StateNotifier<RoadmapState> {
     }).toList();
     state = state.copyWith(roadmaps: list);
     LocalDatabase.saveRoadmap(updated);
+    unawaited(_writeToPrefsCache(list));
   }
 
   RoadmapModel? getRoadmapById(String id) {
@@ -237,6 +311,12 @@ class RoadmapNotifier extends StateNotifier<RoadmapState> {
   }
 
   void clearError() => state = state.copyWith(error: null);
+}
+
+// ignore: prefer_void_to_null
+Future<Null> unawaited(Future<void> future) async {
+  future.catchError((_) {});
+  return null;
 }
 
 // ─────────────────────────────────────────────────────────────

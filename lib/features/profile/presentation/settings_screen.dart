@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../shared/providers/auth_provider.dart';
 
@@ -16,6 +18,58 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _deadlineWarnings = true;
   bool _friendActivity = false;
   bool _weeklySummary = true;
+
+  // AI Configuration
+  final _openAiKeyCtrl = TextEditingController();
+  bool _showApiKey = false;
+  bool _keySaved = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadApiKey();
+  }
+
+  Future<void> _loadApiKey() async {
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.getString('openai_api_key') ?? '';
+    if (mounted) {
+      _openAiKeyCtrl.text = stored;
+      setState(() => _keySaved = stored.isNotEmpty);
+    }
+  }
+
+  Future<void> _saveApiKey() async {
+    final key = _openAiKeyCtrl.text.trim();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('openai_api_key', key);
+    setState(() => _keySaved = key.isNotEmpty);
+    if (mounted) {
+      HapticFeedback.lightImpact();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Row(
+          children: [
+            const Text('✅  ', style: TextStyle(fontSize: 16)),
+            Text(
+              key.isEmpty ? 'API key cleared' : 'API key saved securely',
+              style: GoogleFonts.inter(fontSize: 14, color: Colors.white),
+            ),
+          ],
+        ),
+        backgroundColor: key.isEmpty
+            ? AppColors.bgCard
+            : const Color(0xFF0D2B1A),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ));
+    }
+  }
+
+  @override
+  void dispose() {
+    _openAiKeyCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -139,6 +193,142 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ],
               ),
+
+              // ── AI Configuration ─────────────────────────────────
+              _Section(
+                title: 'AI Configuration',
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Status banner
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _keySaved
+                                ? AppColors.green.withValues(alpha: 0.08)
+                                : AppColors.brand.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: _keySaved
+                                  ? AppColors.green.withValues(alpha: 0.3)
+                                  : AppColors.brand.withValues(alpha: 0.25),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Text(
+                                _keySaved ? '✅' : '✨',
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _keySaved
+                                      ? 'OpenAI API key configured — AI generation active'
+                                      : 'Add your OpenAI key to enable real AI generation',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    color: _keySaved
+                                        ? AppColors.green
+                                        : AppColors.textSecondary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        // Key input
+                        Text(
+                          'OpenAI API Key',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textSecondary,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: AppColors.bgDark,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.borderLight),
+                          ),
+                          child: TextField(
+                            controller: _openAiKeyCtrl,
+                            obscureText: !_showApiKey,
+                            style: GoogleFonts.spaceMono(
+                              fontSize: 13,
+                              color: AppColors.textPrimary,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: 'sk-...',
+                              hintStyle: GoogleFonts.spaceMono(
+                                fontSize: 13,
+                                color: AppColors.textMuted,
+                              ),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 12,
+                              ),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _showApiKey
+                                      ? Icons.visibility_off_outlined
+                                      : Icons.visibility_outlined,
+                                  size: 18,
+                                  color: AppColors.textMuted,
+                                ),
+                                onPressed: () =>
+                                    setState(() => _showApiKey = !_showApiKey),
+                              ),
+                            ),
+                            onChanged: (_) => setState(() {}),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        // Save button
+                        SizedBox(
+                          width: double.infinity,
+                          height: 42,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: AppColors.brandGradient,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: TextButton(
+                              onPressed: _saveApiKey,
+                              child: Text(
+                                'Save API Key',
+                                style: GoogleFonts.inter(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '🔒  Stored locally only. Never sent to our servers.',
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: AppColors.textMuted,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+                    ),
+                  ),
+                ],
+              ).animate().fadeIn(delay: 250.ms),
 
               // ── Subscription ─────────────────────────────
               _Section(

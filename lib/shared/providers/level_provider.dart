@@ -4,6 +4,7 @@ import '../../core/constants/api_constants.dart';
 import '../../core/network/dio_client.dart';
 import '../../models/level_model.dart';
 import 'auth_provider.dart';
+import 'dashboard_provider.dart';
 import 'roadmap_provider.dart';
 
 // ─────────────────────────────────────────────────────────────
@@ -190,12 +191,17 @@ class LevelNotifier extends StateNotifier<LevelState> {
       // Mock mode: update local XP in mock user
       final user = ref.read(currentUserProvider);
       if (user != null) {
-        final targetLvl = state.levels.firstWhere((l) => l.id == levelId, orElse: () => state.levels.first);
+        final targetLvl = state.levels.firstWhere(
+          (l) => l.id == levelId,
+          orElse: () => state.levels.first,
+        );
         final updatedXp = user.xpTotal + targetLvl.xpReward;
         ref.read(authProvider.notifier).updateLocalUser(user.copyWith(
           xpTotal: updatedXp,
           level: updatedXp ~/ 500 + 1,
         ));
+        // Persist daily XP
+        ref.read(todayXpProvider.notifier).addXp(targetLvl.xpReward);
       }
       return true;
     }
@@ -212,6 +218,12 @@ class LevelNotifier extends StateNotifier<LevelState> {
         },
       );
       if (response.statusCode == 200) {
+        // Persist daily XP earned
+        final completedLvl = state.levels.firstWhere(
+          (l) => l.id == levelId,
+          orElse: () => state.levels.first,
+        );
+        ref.read(todayXpProvider.notifier).addXp(completedLvl.xpReward);
         // Refresh user profile details & roadmaps list to sync XP & levels
         await ref.read(authProvider.notifier).getMe();
         await ref.read(roadmapProvider.notifier).fetchRoadmaps(forceRefresh: true);

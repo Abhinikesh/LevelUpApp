@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,323 +7,270 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/utils/helpers.dart';
+import '../../../models/roadmap_model.dart';
 import '../../../shared/providers/auth_provider.dart';
+import '../../../shared/providers/profile_provider.dart';
+import '../../../shared/providers/roadmap_provider.dart';
 import '../../../shared/providers/social_provider.dart';
 import '../../../shared/widgets/premium_animations.dart';
 
-class ProfileScreen extends ConsumerWidget {
+class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends ConsumerState<ProfileScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _rotationController;
+
+  @override
+  void initState() {
+    super.initState();
+    _rotationController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 10),
+    )..repeat();
+
+    Future.microtask(() {
+      ref.read(profileHistoryProvider.notifier).fetchHistory();
+      ref.read(roadmapProvider.notifier).fetchRoadmaps();
+    });
+  }
+
+  @override
+  void dispose() {
+    _rotationController.dispose();
+    super.dispose();
+  }
+
+  String _userTitle(int level) {
+    if (level <= 5) return 'Explorer';
+    if (level <= 15) return 'Warrior';
+    return 'Legend';
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final auth = ref.watch(authProvider);
     final user = auth.currentUser;
     final social = ref.watch(socialProvider);
     final friendsCount = social.friends.length;
+    final completedRoadmaps = ref.watch(completedRoadmapsProvider);
+
+    // Dynamic tagline title
+    final title = _userTitle(user?.level ?? 1);
+
+    // Fetch and combine history logs
+    final historyState = ref.watch(profileHistoryProvider);
+    final historyList = historyState.history;
+    final userBadges = user?.badges ?? [];
+    final roadmaps = ref.watch(roadmapProvider).roadmaps;
+
+    final List<_TimelineActivity> activities = [];
+
+    for (final c in historyList) {
+      activities.add(_TimelineActivity(
+        text: 'Completed Level ${c.levelNumber}: ${c.levelTitle}',
+        time: c.createdAt,
+        dotColor: AppColors.green,
+      ));
+    }
+
+    for (final b in userBadges) {
+      activities.add(_TimelineActivity(
+        text: 'Unlocked "${b.badgeName}" badge',
+        time: b.earnedAt,
+        dotColor: AppColors.gold,
+      ));
+    }
+
+    for (final r in roadmaps) {
+      activities.add(_TimelineActivity(
+        text: 'Started ${r.title} Roadmap',
+        time: r.createdAt,
+        dotColor: AppColors.brand,
+      ));
+    }
+
+    // Sort by time descending
+    activities.sort((a, b) => b.time.compareTo(a.time));
+    final recentActivities = activities.take(6).toList();
 
     return Scaffold(
       backgroundColor: AppColors.bgDark,
       body: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
         slivers: [
           // ── Premium Profile Header ───────────────────────────────
           SliverToBoxAdapter(
             child: Container(
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  colors: [
-                    AppColors.brand.withValues(alpha: 0.18),
-                    AppColors.coral.withValues(alpha: 0.05),
-                    AppColors.bgDark,
-                  ],
-                  center: Alignment.topCenter,
-                  radius: 1.2,
-                ),
+              height: 280,
+              decoration: const BoxDecoration(
+                color: AppColors.bgDark,
               ),
-              padding: EdgeInsets.fromLTRB(
-                  24, MediaQuery.of(context).padding.top + 16, 24, 24),
-              child: Column(
+              child: Stack(
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Profile',
-                        style: GoogleFonts.syne(
-                          fontSize: 26,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.textPrimary,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                      BounceOnTap(
-                        onTap: () => context.push(AppRoutes.settings),
-                        child: Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: AppColors.bgCard,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: AppColors.border),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.2),
-                                blurRadius: 8,
-                                offset: const Offset(0, 4),
-                              )
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.settings_rounded,
-                            color: AppColors.textSecondary,
-                            size: 20,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 28),
-
-                  // Avatar with Rotating/Glowing gradient border
-                  Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // Glow background
-                      Container(
-                        width: 110,
-                        height: 110,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.brand.withValues(alpha: 0.35),
-                              blurRadius: 25,
-                              spreadRadius: 2,
-                            ),
-                            BoxShadow(
-                              color: AppColors.coral.withValues(alpha: 0.15),
-                              blurRadius: 40,
-                              spreadRadius: 5,
-                            ),
+                  // 1. RadialGradient background
+                  Positioned.fill(
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        gradient: RadialGradient(
+                          center: Alignment.topCenter,
+                          radius: 1.2,
+                          colors: [
+                            Color(0xFF2D1B69),
+                            Color(0xFF080810),
                           ],
                         ),
                       ),
-                      // Animated outer border
-                      RotationTransition(
-                        turns: const AlwaysStoppedAnimation(0.2),
-                        child: Container(
-                          width: 104,
-                          height: 104,
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: SweepGradient(
-                              colors: [
-                                AppColors.brand,
-                                AppColors.coral,
-                                AppColors.teal,
-                                AppColors.brand,
-                              ],
-                            ),
+                    ),
+                  ),
+                  // 2. Subtle noise texture overlay
+                  Positioned.fill(
+                    child: Opacity(
+                      opacity: 0.03,
+                      child: Image.network(
+                        'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=300&auto=format&fit=crop',
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                  // Header contents
+                  SafeArea(
+                    bottom: false,
+                    child: Column(
+                      children: [
+                        // Center Profile title & settings
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              context.canPop()
+                                  ? GestureDetector(
+                                      onTap: () => context.pop(),
+                                      child: const Icon(Icons.arrow_back_ios_new,
+                                          color: Colors.white, size: 20),
+                                    )
+                                  : const SizedBox(width: 24),
+                              Text(
+                                'Profile',
+                                style: GoogleFonts.spaceMono(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              GestureDetector(
+                                onTap: () => context.push(AppRoutes.settings),
+                                child: const Icon(Icons.settings_rounded,
+                                    color: Colors.white, size: 22),
+                              ),
+                            ],
                           ),
                         ),
-                      ).animate(onPlay: (controller) => controller.repeat())
-                          .rotate(duration: 6.seconds),
-                      // Inner circle avatar
-                      Container(
-                        width: 96,
-                        height: 96,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: AppColors.bgDark,
-                        ),
-                        child: Center(
-                          child: Container(
-                            width: 88,
-                            height: 88,
-                            decoration: const BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: AppColors.darkGradient,
+                        const Spacer(),
+                        // Avatar (centered, 96px)
+                        Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            AnimatedBuilder(
+                              animation: _rotationController,
+                              builder: (_, __) => CustomPaint(
+                                size: const Size(96, 96),
+                                painter: _AvatarRingPainter(
+                                    angle: _rotationController.value *
+                                        2 *
+                                        math.pi),
+                              ),
                             ),
-                            child: Center(
-                              child: Text(
-                                (user?.name.isNotEmpty == true)
-                                    ? user!.name[0].toUpperCase()
-                                    : '?',
-                                style: GoogleFonts.syne(
-                                  fontSize: 38,
-                                  fontWeight: FontWeight.w900,
-                                  color: AppColors.textPrimary,
+                            Container(
+                              width: 86,
+                              height: 86,
+                              decoration: const BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: AppColors.bgDark,
+                              ),
+                              child: Center(
+                                child: Container(
+                                  width: 80,
+                                  height: 80,
+                                  decoration: const BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    gradient: AppColors.darkGradient,
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      (user?.name.isNotEmpty == true)
+                                          ? user!.name[0].toUpperCase()
+                                          : '?',
+                                      style: GoogleFonts.spaceMono(
+                                        fontSize: 34,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        ),
-                      ),
-                      // Camera overlay
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: BounceOnTap(
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Avatar uploads coming soon in Beta!'),
-                                duration: Duration(seconds: 2),
+                            // Edit button bottom right
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: BounceOnTap(
+                                onTap: () {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                          'Avatar uploads coming soon in Beta!'),
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
+                                },
+                                child: Container(
+                                  width: 28,
+                                  height: 28,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF1C1C2E),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                        color: AppColors.bgDark, width: 2),
+                                  ),
+                                  child: const Icon(
+                                    Icons.camera_alt_rounded,
+                                    size: 13,
+                                    color: Colors.white,
+                                  ),
+                                ),
                               ),
-                            );
-                          },
-                          child: Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              gradient: AppColors.brandGradient,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: AppColors.bgDark, width: 2.5),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.3),
-                                  blurRadius: 6,
-                                  offset: const Offset(0, 3),
-                                )
-                              ],
                             ),
-                            child: const Icon(
-                              Icons.camera_alt_rounded,
-                              size: 13,
-                              color: Colors.white,
-                            ),
+                          ],
+                        ).animate().scale(
+                            duration: 500.ms, curve: Curves.elasticOut),
+                        const SizedBox(height: 12),
+                        // Name
+                        Text(
+                          user?.name ?? 'Learner',
+                          style: GoogleFonts.spaceMono(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
                           ),
                         ),
-                      ),
-                    ],
-                  ).animate().scale(duration: 600.ms, curve: Curves.elasticOut),
-
-                  const SizedBox(height: 18),
-                  Text(
-                    user?.name ?? 'Learner',
-                    style: GoogleFonts.syne(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppColors.brand.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(100),
-                      border: Border.all(color: AppColors.brand.withValues(alpha: 0.2)),
-                    ),
-                    child: Text(
-                      'Level ${user?.level ?? 1} · Explorer',
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: AppColors.brand,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Premium Stats Grid (Cards instead of a single bar)
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _StatCard(
-                          value: user?.xpTotal ?? 0,
-                          label: 'TOTAL XP',
-                          icon: Icons.star_rounded,
-                          color: AppColors.gold,
+                        const SizedBox(height: 4),
+                        // Tagline
+                        Text(
+                          'Level ${user?.level ?? 1} • $title',
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            color: AppColors.textSecondary,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _StatCard(
-                          value: user?.level ?? 1,
-                          label: 'LEVEL',
-                          icon: Icons.shield_rounded,
-                          color: AppColors.brand,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _StatCard(
-                          value: friendsCount,
-                          label: 'FRIENDS',
-                          icon: Icons.people_alt_rounded,
-                          color: AppColors.teal,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _StatCard(
-                          value: user?.streakCount ?? 0,
-                          label: 'STREAK',
-                          icon: Icons.local_fire_department_rounded,
-                          color: AppColors.coral,
-                          isStreak: true,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // ── Badges Grid ──────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.pagePadding, 16,
-                  AppSpacing.pagePadding, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _SectionTitle(title: 'Badges Inventory', count: '${_mockBadges.length}'),
-                  const SizedBox(height: 16),
-                  GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 4,
-                      mainAxisSpacing: 16,
-                      crossAxisSpacing: 12,
-                      childAspectRatio: 0.78,
-                    ),
-                    itemCount: _mockBadges.length,
-                    itemBuilder: (_, i) => HoverShift(
-                      child: _BadgeCell(badge: _mockBadges[i], index: i),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // ── Trophies Showcase ──────────────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.pagePadding, 0,
-                  AppSpacing.pagePadding, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _SectionTitle(title: 'Trophy Cabinet 🏆', count: '0'),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    height: 150,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      physics: const BouncingScrollPhysics(),
-                      children: [
-                        _EmptyTrophyCard(),
-                        ..._mockTrophies.map((t) => _TrophyCard(trophy: t)),
+                        const Spacer(),
                       ],
                     ),
                   ),
@@ -331,60 +279,261 @@ class ProfileScreen extends ConsumerWidget {
             ),
           ),
 
-          // ── Activity Timeline ──────────────────────────────────
+          // ── Stats row ──────────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.pagePadding, vertical: 16),
+              child: Container(
+                height: 80,
+                decoration: BoxDecoration(
+                  color: AppColors.bgCard,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _StatItem(
+                        value: user?.xpTotal ?? 0,
+                        label: 'TOTAL XP',
+                      ),
+                    ),
+                    Container(
+                      width: 1,
+                      height: 40,
+                      color: AppColors.border,
+                    ),
+                    Expanded(
+                      child: _StatItem(
+                        value: user?.level ?? 1,
+                        label: 'LEVEL',
+                      ),
+                    ),
+                    Container(
+                      width: 1,
+                      height: 40,
+                      color: AppColors.border,
+                    ),
+                    Expanded(
+                      child: _StatItem(
+                        value: friendsCount,
+                        label: 'FRIENDS',
+                      ),
+                    ),
+                    Container(
+                      width: 1,
+                      height: 40,
+                      color: AppColors.border,
+                    ),
+                    Expanded(
+                      child: _StatItem(
+                        value: user?.streakCount ?? 0,
+                        label: 'STREAK',
+                        isStreak: true,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // ── Badges Inventory Section ─────────────────────────────
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.pagePadding, 0,
-                  AppSpacing.pagePadding, 24),
+                  AppSpacing.pagePadding, 8, AppSpacing.pagePadding, 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _SectionTitle(title: 'Recent Activity', count: null),
-                  const SizedBox(height: 16),
-                  ..._mockActivity.asMap().entries.map((e) {
-                    return SlideFadeTransition(
-                      delay: Duration(milliseconds: e.key * 80),
-                      child: _ActivityItem(
-                        item: e.value,
-                        index: e.key,
-                        isLast: e.key == _mockActivity.length - 1,
+                  // Title row
+                  Row(
+                    children: [
+                      Text(
+                        'Badges',
+                        style: GoogleFonts.spaceMono(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
                       ),
-                    );
-                  }),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.brand,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '${userBadges.length}',
+                          style: GoogleFonts.spaceGrotesk(
+                            fontSize: 8,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  // Wrap-based Badges Grid
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final width = constraints.maxWidth;
+                      final spacing = (width - (80 * 4)) / 3.0;
+                      return Wrap(
+                        spacing: spacing.clamp(4.0, 24.0),
+                        runSpacing: 16,
+                        children: _allBadges.map((badge) {
+                          final earned = userBadges
+                              .any((b) => b.badgeType == badge.slug);
+                          return SizedBox(
+                            width: 80,
+                            height: 100,
+                            child: _BadgeCell(badge: badge, earned: earned),
+                          );
+                        }).toList(),
+                      );
+                    },
+                  ),
                 ],
               ),
             ),
           ),
 
-          // Sign out button with Premium Aesthetics
+          // ── Trophy Cabinet ─────────────────────────────────────
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.pagePadding, 16,
-                  AppSpacing.pagePadding, 48),
+                  AppSpacing.pagePadding, 0, AppSpacing.pagePadding, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        'Trophy Cabinet 🏆',
+                        style: GoogleFonts.spaceMono(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.brand,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '${completedRoadmaps.length}',
+                          style: GoogleFonts.spaceGrotesk(
+                            fontSize: 8,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    height: 170,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      children: [
+                        if (completedRoadmaps.isEmpty)
+                          _EmptyTrophyCard()
+                        else
+                          ...completedRoadmaps.map((r) => _TrophyCard(roadmap: r)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // ── Recent Activity ────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.pagePadding, 0, AppSpacing.pagePadding, 48),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Recent Activity',
+                    style: GoogleFonts.spaceMono(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (recentActivities.isEmpty)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: AppColors.bgCard,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Center(
+                        child: Text(
+                          'No activity yet',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            color: AppColors.textMuted,
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    ...List.generate(recentActivities.length, (i) {
+                      return _ActivityItem(
+                        item: recentActivities[i],
+                        isLast: i == recentActivities.length - 1,
+                      );
+                    }),
+                ],
+              ),
+            ),
+          ),
+
+          // Sign out session
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.pagePadding, 0, AppSpacing.pagePadding, 64),
               child: BounceOnTap(
-                onTap: () {
-                  ref.read(authProvider.notifier).logout();
-                },
+                onTap: () => ref.read(authProvider.notifier).logout(),
                 child: Container(
                   height: 56,
                   decoration: BoxDecoration(
                     color: Colors.transparent,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.error.withValues(alpha: 0.5)),
+                    border: Border.all(
+                        color: AppColors.error.withValues(alpha: 0.5)),
                   ),
                   child: Center(
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.logout_rounded, color: AppColors.error, size: 20),
+                        const Icon(Icons.logout_rounded,
+                            color: AppColors.error, size: 20),
                         const SizedBox(width: 8),
                         Text(
                           'Sign Out Session',
-                          style: GoogleFonts.syne(
+                          style: GoogleFonts.spaceMono(
                             fontSize: 16,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.bold,
                             color: AppColors.error,
                           ),
                         ),
@@ -401,232 +550,256 @@ class ProfileScreen extends ConsumerWidget {
   }
 }
 
-// ─── Stat Card Widget ───────────────────────────────────────────
-class _StatCard extends StatelessWidget {
+// ─── Stat Item Widget ──────────────────────────────────────────
+class _StatItem extends StatelessWidget {
   final int value;
   final String label;
-  final IconData icon;
-  final Color color;
   final bool isStreak;
 
-  const _StatCard({
+  const _StatItem({
     required this.value,
     required this.label,
-    required this.icon,
-    required this.color,
     this.isStreak = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.bgCard,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                isStreak
-                    ? Row(
-                        children: [
-                          CountUpText(
-                            end: value,
-                            style: GoogleFonts.syne(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w900,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          const WobbleWidget(
-                            duration: Duration(milliseconds: 1000),
-                            child: Text('🔥', style: TextStyle(fontSize: 16)),
-                          ),
-                        ],
-                      )
-                    : CountUpText(
-                        end: value,
-                        style: GoogleFonts.syne(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                const SizedBox(height: 2),
-                Text(
-                  label,
-                  style: GoogleFonts.inter(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textMuted,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SectionTitle extends StatelessWidget {
-  final String title;
-  final String? count;
-  const _SectionTitle({required this.title, this.count});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text(
-          title,
-          style: GoogleFonts.syne(
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        if (count != null) ...[
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: AppColors.bgCardLight,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Text(
-              count!,
-              style: GoogleFonts.inter(
-                fontSize: 11,
-                color: AppColors.brand,
-                fontWeight: FontWeight.w700,
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CountUpText(
+              end: value,
+              style: GoogleFonts.spaceGrotesk(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
               ),
             ),
+            if (isStreak) ...[
+              const SizedBox(width: 2),
+              const WobbleWidget(
+                child: Text('🔥', style: TextStyle(fontSize: 16)),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            letterSpacing: 0.5,
+            color: AppColors.textMuted,
           ),
-        ],
+        ),
       ],
     );
   }
 }
 
-// ─── Badge Data ────────────────────────────────────────────────
-class _BadgeData {
-  final String emoji;
+// ─── Predefined Badge structure ───────────────────────────────
+class _PredefinedBadge {
+  final String slug;
   final String name;
-  final bool earned;
+  final String emoji;
   final Color color;
   final String description;
 
-  const _BadgeData(this.emoji, this.name, this.earned, this.color, this.description);
+  const _PredefinedBadge({
+    required this.slug,
+    required this.name,
+    required this.emoji,
+    required this.color,
+    required this.description,
+  });
 }
 
-final _mockBadges = const [
-  _BadgeData('🔥', 'On Fire', true, Color(0xFFFF8C00), 'Maintain a streak of 7 days or more.'),
-  _BadgeData('⚡', 'Quick Start', true, Color(0xFFFFD93D), 'Complete your first level on the same day you sign up.'),
-  _BadgeData('🧠', 'Deep Thinker', true, Color(0xFF6C63FF), 'Spend more than 1 hour learning in a single session.'),
-  _BadgeData('💪', 'Consistent', true, Color(0xFF43E97B), 'Complete 5 levels within a single week.'),
-  _BadgeData('🏆', 'Champion', false, Color(0xFFFFB800), 'Reach first place in the weekly leaderboard.'),
-  _BadgeData('🎯', 'Sharpshooter', false, Color(0xFFFF6584), 'Complete 3 levels in a row without failing any proof checks.'),
-  _BadgeData('🌟', 'Star Learner', false, Color(0xFF38F9D7), 'Earn a total of 5,000 XP across all roadmaps.'),
-  _BadgeData('🚀', 'Rocket Speed', false, Color(0xFF8B5CF6), 'Complete an entire roadmap within 3 days.'),
+const _allBadges = [
+  _PredefinedBadge(
+    slug: 'first_level',
+    name: 'First Step',
+    emoji: '👟',
+    color: Color(0xFF00E5A0),
+    description: 'Complete your first level milestone.',
+  ),
+  _PredefinedBadge(
+    slug: 'level_5',
+    name: 'On a Roll',
+    emoji: '🎯',
+    color: Color(0xFF7B6EF6),
+    description: 'Complete 5 levels on your journey.',
+  ),
+  _PredefinedBadge(
+    slug: 'level_10',
+    name: 'Dedicated',
+    emoji: '💪',
+    color: Color(0xFFFF5E7D),
+    description: 'Complete 10 levels on your journey.',
+  ),
+  _PredefinedBadge(
+    slug: 'level_25',
+    name: 'Champion',
+    emoji: '🏆',
+    color: Color(0xFFFFB300),
+    description: 'Complete 25 levels on your journey.',
+  ),
+  _PredefinedBadge(
+    slug: 'streak_3',
+    name: 'Consistent',
+    emoji: '🔥',
+    color: Color(0xFFFF5E7D),
+    description: 'Reach a 3-day active streak.',
+  ),
+  _PredefinedBadge(
+    slug: 'streak_7',
+    name: 'Week Warrior',
+    emoji: '⚡',
+    color: Color(0xFF7B6EF6),
+    description: 'Reach a 7-day active streak.',
+  ),
+  _PredefinedBadge(
+    slug: 'streak_30',
+    name: 'Iron Will',
+    emoji: '🦾',
+    color: Color(0xFFFFB300),
+    description: 'Reach a 30-day active streak.',
+  ),
+  _PredefinedBadge(
+    slug: 'xp_500',
+    name: 'XP Earner',
+    emoji: '⭐',
+    color: Color(0xFF00E5A0),
+    description: 'Earn a total of 500 XP.',
+  ),
+  _PredefinedBadge(
+    slug: 'xp_2000',
+    name: 'XP Hunter',
+    emoji: '🌟',
+    color: Color(0xFF7B6EF6),
+    description: 'Earn a total of 2,000 XP.',
+  ),
+  _PredefinedBadge(
+    slug: 'xp_5000',
+    name: 'XP Legend',
+    emoji: '💎',
+    color: Color(0xFFFFB300),
+    description: 'Earn a total of 5,000 XP.',
+  ),
+  _PredefinedBadge(
+    slug: 'roadmap_done',
+    name: 'Completionist',
+    emoji: '🎓',
+    color: Color(0xFF00E5A0),
+    description: 'Complete an entire roadmap challenge.',
+  ),
+  _PredefinedBadge(
+    slug: 'code_ninja',
+    name: 'Code Ninja',
+    emoji: '🥷',
+    color: Color(0xFF7B6EF6),
+    description: 'Complete a coding verification level.',
+  ),
 ];
 
+// ─── Badge Cell Widget ─────────────────────────────────────────
 class _BadgeCell extends StatelessWidget {
-  final _BadgeData badge;
-  final int index;
-  const _BadgeCell({required this.badge, required this.index});
+  final _PredefinedBadge badge;
+  final bool earned;
+
+  const _BadgeCell({required this.badge, required this.earned});
 
   @override
   Widget build(BuildContext context) {
-    return BounceOnTap(
-      onTap: () => _showBadgeSheet(context),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+    Widget circle = Container(
+      width: 64,
+      height: 64,
+      decoration: BoxDecoration(
+        color: earned ? badge.color.withValues(alpha: 0.12) : AppColors.bgCard,
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: earned ? badge.color.withValues(alpha: 0.6) : AppColors.border,
+          width: 1.5,
+        ),
+        boxShadow: earned
+            ? [
+                BoxShadow(
+                  color: badge.color.withValues(alpha: 0.25),
+                  blurRadius: 10,
+                  spreadRadius: 1,
+                )
+              ]
+            : null,
+      ),
+      child: Center(
+        child: Text(
+          badge.emoji,
+          style: const TextStyle(fontSize: 28),
+        ),
+      ),
+    );
+
+    if (!earned) {
+      circle = Stack(
+        alignment: Alignment.center,
         children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: badge.earned
-                  ? badge.color.withValues(alpha: 0.12)
-                  : AppColors.bgCard,
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: badge.earned
-                    ? badge.color.withValues(alpha: 0.6)
-                    : AppColors.border,
-                width: 1.5,
-              ),
-              boxShadow: badge.earned
-                  ? [
-                      BoxShadow(
-                        color: badge.color.withValues(alpha: 0.2),
-                        blurRadius: 12,
-                        spreadRadius: 1,
-                      )
-                    ]
-                  : null,
-            ),
-            child: Center(
-              child: badge.earned
-                  ? Text(badge.emoji, style: const TextStyle(fontSize: 28))
-                  : Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Text(
-                          badge.emoji,
-                          style: TextStyle(
-                            fontSize: 28,
-                            color: Colors.grey.withValues(alpha: 0.15),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(
-                            color: AppColors.bgCardLight,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.lock_outline_rounded,
-                            size: 14,
-                            color: AppColors.textMuted,
-                          ),
-                        ),
-                      ],
-                    ),
+          ColorFiltered(
+            colorFilter: const ColorFilter.matrix(<double>[
+              0.2126, 0.7152, 0.0722, 0, 0,
+              0.2126, 0.7152, 0.0722, 0, 0,
+              0.2126, 0.7152, 0.0722, 0, 0,
+              0,      0,      0,      1, 0,
+            ]),
+            child: Opacity(
+              opacity: 0.3,
+              child: circle,
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            badge.name,
-            style: GoogleFonts.inter(
-              fontSize: 10,
-              fontWeight: badge.earned ? FontWeight.w700 : FontWeight.w500,
-              color: badge.earned ? AppColors.textPrimary : AppColors.textMuted,
+          Positioned(
+            bottom: 2,
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: const BoxDecoration(
+                color: AppColors.bgCardLight,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.lock_outline_rounded,
+                size: 12,
+                color: AppColors.textMuted,
+              ),
             ),
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
         ],
+      );
+    }
+
+    return HoverShift(
+      child: BounceOnTap(
+        onTap: () => _showBadgeSheet(context),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            circle,
+            const SizedBox(height: 6),
+            Text(
+              badge.name,
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                letterSpacing: 0.5,
+                fontWeight: earned ? FontWeight.bold : FontWeight.normal,
+                color: earned ? AppColors.textPrimary : AppColors.textMuted,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -643,7 +816,10 @@ class _BadgeCell extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.bgCard,
           border: Border(
-            top: BorderSide(color: badge.color.withValues(alpha: 0.3), width: 1.5),
+            top: BorderSide(
+              color: badge.color.withValues(alpha: 0.3),
+              width: 1.5,
+            ),
           ),
           borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
@@ -663,12 +839,12 @@ class _BadgeCell extends StatelessWidget {
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: badge.earned
+                color: earned
                     ? badge.color.withValues(alpha: 0.15)
                     : AppColors.bgDark,
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: badge.earned ? badge.color : AppColors.border,
+                  color: earned ? badge.color : AppColors.border,
                   width: 2,
                 ),
               ),
@@ -682,9 +858,9 @@ class _BadgeCell extends StatelessWidget {
             const SizedBox(height: 18),
             Text(
               badge.name,
-              style: GoogleFonts.syne(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
+              style: GoogleFonts.spaceMono(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
                 color: AppColors.textPrimary,
               ),
             ),
@@ -701,17 +877,17 @@ class _BadgeCell extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
-                color: badge.earned
+                color: earned
                     ? AppColors.green.withValues(alpha: 0.1)
                     : AppColors.border,
                 borderRadius: BorderRadius.circular(100),
               ),
               child: Text(
-                badge.earned ? 'UNLOCKED' : 'LOCKED',
-                style: GoogleFonts.syne(
+                earned ? 'UNLOCKED' : 'LOCKED',
+                style: GoogleFonts.spaceMono(
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
-                  color: badge.earned ? AppColors.green : AppColors.textMuted,
+                  color: earned ? AppColors.green : AppColors.textMuted,
                   letterSpacing: 1,
                 ),
               ),
@@ -723,67 +899,14 @@ class _BadgeCell extends StatelessWidget {
   }
 }
 
-// ─── Trophy Showcase ───────────────────────────────────────────
-class _TrophyData {
-  final String name;
-  final String date;
-  final int levels;
-  const _TrophyData(this.name, this.date, this.levels);
-}
-
-final _mockTrophies = <_TrophyData>[];
-
-class _TrophyCard extends StatelessWidget {
-  final _TrophyData trophy;
-  const _TrophyCard({required this.trophy});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 170,
-      margin: const EdgeInsets.only(right: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.bgCard,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.gold.withValues(alpha: 0.4), width: 1.5),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text('🏆', style: TextStyle(fontSize: 36)),
-          const SizedBox(height: 8),
-          Text(
-            trophy.name,
-            style: GoogleFonts.syne(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-            ),
-            maxLines: 2,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            trophy.date,
-            style: GoogleFonts.inter(
-              fontSize: 11,
-              color: AppColors.textMuted,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
+// ─── Empty Trophy Cabinet Widget ───────────────────────────────
 class _EmptyTrophyCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 200,
-      margin: const EdgeInsets.only(right: 12),
-      padding: const EdgeInsets.all(18),
+      width: 160,
+      constraints: const BoxConstraints(minHeight: 160),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.bgCard,
         borderRadius: BorderRadius.circular(20),
@@ -791,10 +914,10 @@ class _EmptyTrophyCard extends StatelessWidget {
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Glowing trophy shape
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: AppColors.gold.withValues(alpha: 0.05),
               shape: BoxShape.circle,
@@ -802,20 +925,78 @@ class _EmptyTrophyCard extends StatelessWidget {
             ),
             child: const Text('🏆', style: TextStyle(fontSize: 26)),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Text(
             'Cabinet Empty',
-            style: GoogleFonts.syne(
+            style: GoogleFonts.spaceMono(
               fontSize: 13,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.bold,
               color: AppColors.textSecondary,
             ),
+            textAlign: TextAlign.center,
           ),
           const SizedBox(height: 4),
           Text(
             'Complete your active roadmap to claim your first trophy.',
             style: GoogleFonts.inter(
-              fontSize: 10,
+              fontSize: 11,
+              color: AppColors.textMuted,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Trophy Card Widget ─────────────────────────────────────────
+class _TrophyCard extends StatelessWidget {
+  final RoadmapModel roadmap;
+  const _TrophyCard({required this.roadmap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 160,
+      constraints: const BoxConstraints(minHeight: 160),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.bgCard,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+            color: AppColors.gold.withValues(alpha: 0.4), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.gold.withValues(alpha: 0.05),
+            blurRadius: 8,
+          )
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('🏆', style: TextStyle(fontSize: 40)),
+          const SizedBox(height: 8),
+          Text(
+            roadmap.title,
+            style: GoogleFonts.spaceMono(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            AppHelpers.timeAgo(roadmap.updatedAt ?? roadmap.createdAt),
+            style: GoogleFonts.inter(
+              fontSize: 11,
               color: AppColors.textMuted,
             ),
             textAlign: TextAlign.center,
@@ -826,30 +1007,25 @@ class _EmptyTrophyCard extends StatelessWidget {
   }
 }
 
-// ─── Activity Timeline ──────────────────────────────────────────
-class _ActivityData {
+// ─── Timeline Activity Item ────────────────────────────────────
+class _TimelineActivity {
   final String text;
-  final String time;
+  final DateTime time;
   final Color dotColor;
-  const _ActivityData(this.text, this.time, this.dotColor);
+
+  _TimelineActivity({
+    required this.text,
+    required this.time,
+    required this.dotColor,
+  });
 }
 
-final _mockActivity = const [
-  _ActivityData('Started DSA Challenge Roadmap', '14 days ago', AppColors.brand),
-  _ActivityData('Unlocked "Quick Start" badge', '12 days ago', AppColors.gold),
-  _ActivityData('Completed Level 5: Arrays & Strings', '10 days ago', AppColors.green),
-  _ActivityData('Reached 7-day learning streak 🔥', '7 days ago', AppColors.coral),
-  _ActivityData('Completed Level 8: Binary Trees recursion', '4 days ago', AppColors.green),
-];
-
 class _ActivityItem extends StatelessWidget {
-  final _ActivityData item;
-  final int index;
+  final _TimelineActivity item;
   final bool isLast;
 
   const _ActivityItem({
     required this.item,
-    required this.index,
     required this.isLast,
   });
 
@@ -859,54 +1035,41 @@ class _ActivityItem extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Timeline Node (Line & Dot)
           SizedBox(
             width: 32,
             child: Column(
               children: [
-                // Glowing Dot
+                const SizedBox(height: 6),
                 Container(
-                  width: 14,
-                  height: 14,
+                  width: 12,
+                  height: 12,
                   decoration: BoxDecoration(
-                    color: AppColors.bgDark,
+                    color: item.dotColor,
                     shape: BoxShape.circle,
-                    border: Border.all(color: item.dotColor, width: 3),
                     boxShadow: [
                       BoxShadow(
                         color: item.dotColor.withValues(alpha: 0.35),
-                        blurRadius: 8,
+                        blurRadius: 6,
                         spreadRadius: 1,
                       )
                     ],
                   ),
                 ),
-                // Upward/Downward Line
                 if (!isLast)
                   Expanded(
                     child: Container(
-                      width: 2,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            item.dotColor.withValues(alpha: 0.4),
-                            _mockActivity[index + 1].dotColor.withValues(alpha: 0.2),
-                          ],
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                        ),
-                      ),
+                      width: 1,
+                      color: AppColors.border,
                     ),
                   ),
               ],
             ),
           ),
-          const SizedBox(width: 12),
-          // Content Card
+          const SizedBox(width: 8),
           Expanded(
             child: Container(
               margin: const EdgeInsets.only(bottom: 16),
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: AppColors.bgCard,
                 borderRadius: BorderRadius.circular(14),
@@ -918,17 +1081,17 @@ class _ActivityItem extends StatelessWidget {
                   Text(
                     item.text,
                     style: GoogleFonts.inter(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
                       color: AppColors.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    item.time,
+                    AppHelpers.timeAgo(item.time),
                     style: GoogleFonts.inter(
-                      fontSize: 11,
-                      color: AppColors.textMuted,
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
                     ),
                   ),
                 ],
@@ -939,4 +1102,35 @@ class _ActivityItem extends StatelessWidget {
       ),
     );
   }
+}
+
+// ─── Custom Painter for Rotating Avatar Gradient Ring ──────────
+class _AvatarRingPainter extends CustomPainter {
+  final double angle;
+
+  const _AvatarRingPainter({required this.angle});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Rect.fromLTWH(0, 0, size.width, size.height);
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3
+      ..shader = SweepGradient(
+        colors: const [
+          Color(0xFF7B6EF6),
+          Color(0xFFFF5E7D),
+          Color(0xFF00E5A0),
+          Color(0xFF7B6EF6),
+        ],
+        transform: GradientRotation(angle),
+      ).createShader(rect);
+
+    canvas.drawCircle(Offset(size.width / 2, size.height / 2),
+        size.width / 2 - 1.5, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _AvatarRingPainter oldDelegate) =>
+      oldDelegate.angle != angle;
 }
