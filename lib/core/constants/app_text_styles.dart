@@ -130,4 +130,41 @@ class AppTextStyles {
     fontWeight: FontWeight.w600,
     letterSpacing: 0.3,
   );
+
+  // ── Plan-specified aliases ────────────────────────────────────
+  /// App logo wordmark — SpaceMono 20 700 brand purple
+  static TextStyle appLogo = GoogleFonts.spaceMono(
+    fontSize: 20,
+    fontWeight: FontWeight.w700,
+    color: const Color(0xFF7B6EF6),
+  );
+
+  /// Page-level hero title — SpaceMono 22 700 near-white
+  static TextStyle pageTitle = GoogleFonts.spaceMono(
+    fontSize: 22,
+    fontWeight: FontWeight.w700,
+    color: const Color(0xFFF5F5FF),
+  );
+
+  /// Section heading — SpaceMono 16 700 near-white
+  static TextStyle sectionTitle = GoogleFonts.spaceMono(
+    fontSize: 16,
+    fontWeight: FontWeight.w700,
+    color: const Color(0xFFF5F5FF),
+  );
+
+  /// Large stat number — SpaceGrotesk 24 700 near-white
+  static TextStyle statNumber = GoogleFonts.spaceGrotesk(
+    fontSize: 24,
+    fontWeight: FontWeight.w700,
+    color: const Color(0xFFF5F5FF),
+  );
+
+  /// CTA button label — SpaceMono 14 700 white
+  static TextStyle buttonText = GoogleFonts.spaceMono(
+    fontSize: 14,
+    fontWeight: FontWeight.w700,
+    color: Colors.white,
+  );
 }
+

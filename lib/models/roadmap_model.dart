@@ -15,6 +15,8 @@ class RoadmapModel {
   final String? coverEmoji;
   final int totalXpReward;
   final int xpEarned;
+  /// 'simple' or 'sublevels'
+  final String mapStyle;
 
   const RoadmapModel({
     required this.id,
@@ -33,9 +35,12 @@ class RoadmapModel {
     this.coverEmoji,
     this.totalXpReward = 0,
     this.xpEarned = 0,
+    this.mapStyle = 'simple',
   });
 
   // ── Computed Properties ──────────────────────────────────────
+
+  bool get hasSubLevels => mapStyle == 'sublevels';
 
   double get progressPercent {
     if (totalLevels == 0) return 0.0;
@@ -111,6 +116,7 @@ class RoadmapModel {
       coverEmoji: json['coverEmoji'] as String?,
       totalXpReward: (json['totalXpReward'] as num?)?.toInt() ?? 0,
       xpEarned: (json['xpEarned'] as num?)?.toInt() ?? 0,
+      mapStyle: json['mapStyle'] as String? ?? 'simple',
     );
   }
 
@@ -132,6 +138,7 @@ class RoadmapModel {
       'coverEmoji': coverEmoji,
       'totalXpReward': totalXpReward,
       'xpEarned': xpEarned,
+      'mapStyle': mapStyle,
     };
   }
 
@@ -152,6 +159,7 @@ class RoadmapModel {
     String? coverEmoji,
     int? totalXpReward,
     int? xpEarned,
+    String? mapStyle,
   }) {
     return RoadmapModel(
       id: id ?? this.id,
@@ -170,6 +178,7 @@ class RoadmapModel {
       coverEmoji: coverEmoji ?? this.coverEmoji,
       totalXpReward: totalXpReward ?? this.totalXpReward,
       xpEarned: xpEarned ?? this.xpEarned,
+      mapStyle: mapStyle ?? this.mapStyle,
     );
   }
 
@@ -181,5 +190,5 @@ class RoadmapModel {
   int get hashCode => id.hashCode;
 
   @override
-  String toString() => 'RoadmapModel($title, $currentLevel/$totalLevels)';
+  String toString() => 'RoadmapModel($title, $currentLevel/$totalLevels, style: $mapStyle)';
 }

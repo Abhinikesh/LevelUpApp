@@ -5,6 +5,94 @@ typedef LevelStatus = LevelState;
 
 enum ProofType { quiz, photo, code, voice, timer, screenshot, text }
 
+// ─── SubLevel Model ───────────────────────────────────────────────
+class SubLevel {
+  final String id;
+  final String parentLevelId;
+  final String title;
+  final String description;
+  final String proofType; // quiz/photo/code/timer/screenshot/text
+  final bool isCompleted;
+  final int orderIndex;
+  final DateTime? completedAt;
+
+  const SubLevel({
+    required this.id,
+    required this.parentLevelId,
+    required this.title,
+    this.description = '',
+    this.proofType = 'quiz',
+    this.isCompleted = false,
+    required this.orderIndex,
+    this.completedAt,
+  });
+
+  /// Composite ID used for routing sub-level verifications
+  String get compositeId => '${parentLevelId}__sub__$id';
+
+  /// e.g. "1.1", "1.2" from orderIndex
+  String labelFor(int parentNumber) =>
+      '$parentNumber.${orderIndex + 1}';
+
+  factory SubLevel.fromJson(Map<String, dynamic> json) {
+    return SubLevel(
+      id: json['id'] as String? ?? '',
+      parentLevelId: json['parentLevelId'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      proofType: json['proofType'] as String? ?? 'quiz',
+      isCompleted: json['isCompleted'] as bool? ?? false,
+      orderIndex: (json['orderIndex'] as num?)?.toInt() ?? 0,
+      completedAt: json['completedAt'] != null
+          ? DateTime.tryParse(json['completedAt'] as String)
+          : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'parentLevelId': parentLevelId,
+      'title': title,
+      'description': description,
+      'proofType': proofType,
+      'isCompleted': isCompleted,
+      'orderIndex': orderIndex,
+      'completedAt': completedAt?.toIso8601String(),
+    };
+  }
+
+  SubLevel copyWith({
+    String? id,
+    String? parentLevelId,
+    String? title,
+    String? description,
+    String? proofType,
+    bool? isCompleted,
+    int? orderIndex,
+    DateTime? completedAt,
+  }) {
+    return SubLevel(
+      id: id ?? this.id,
+      parentLevelId: parentLevelId ?? this.parentLevelId,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      proofType: proofType ?? this.proofType,
+      isCompleted: isCompleted ?? this.isCompleted,
+      orderIndex: orderIndex ?? this.orderIndex,
+      completedAt: completedAt ?? this.completedAt,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) || other is SubLevel && other.id == id;
+
+  @override
+  int get hashCode => id.hashCode;
+}
+
+// ─── LevelModel ───────────────────────────────────────────────────
 class LevelModel {
   final String id;
   final String roadmapId;
@@ -20,6 +108,7 @@ class LevelModel {
   final List<String> topics;
   final String? notes;
   final Map<String, dynamic>? verificationData;
+  final List<SubLevel> subLevels;
 
   const LevelModel({
     required this.id,
@@ -36,18 +125,35 @@ class LevelModel {
     this.topics = const [],
     this.notes,
     this.verificationData,
+    this.subLevels = const [],
   });
 
   // ── Computed ──────────────────────────────────────────────────
 
   LevelState get state {
-    if (isCompleted) return LevelState.completed;
+    if (isCompletedActual) return LevelState.completed;
     if (!isLocked) return LevelState.active;
     return LevelState.locked;
   }
 
   /// Alias for state — used by UI widgets
   LevelState get status => state;
+
+  /// If sub-levels exist, the level is truly complete only when ALL sub-levels
+  /// are completed. Falls back to [isCompleted] for simple levels.
+  bool get isCompletedActual {
+    if (subLevels.isEmpty) return isCompleted;
+    return subLevels.every((s) => s.isCompleted);
+  }
+
+  /// Progress fraction 0.0–1.0 for sub-level completion
+  double get subLevelProgress {
+    if (subLevels.isEmpty) return isCompleted ? 1.0 : 0.0;
+    return subLevels.where((s) => s.isCompleted).length / subLevels.length;
+  }
+
+  int get completedSubLevelCount =>
+      subLevels.where((s) => s.isCompleted).length;
 
   String get proofTypeLabel {
     switch (proofType) {
@@ -128,6 +234,10 @@ class LevelModel {
       notes: json['notes'] as String?,
       verificationData:
           json['verificationData'] as Map<String, dynamic>?,
+      subLevels: (json['subLevels'] as List<dynamic>?)
+              ?.map((s) => SubLevel.fromJson(s as Map<String, dynamic>))
+              .toList() ??
+          [],
     );
   }
 
@@ -147,6 +257,7 @@ class LevelModel {
       'topics': topics,
       'notes': notes,
       'verificationData': verificationData,
+      'subLevels': subLevels.map((s) => s.toJson()).toList(),
     };
   }
 
@@ -165,6 +276,7 @@ class LevelModel {
     List<String>? topics,
     String? notes,
     Map<String, dynamic>? verificationData,
+    List<SubLevel>? subLevels,
   }) {
     return LevelModel(
       id: id ?? this.id,
@@ -181,6 +293,7 @@ class LevelModel {
       topics: topics ?? this.topics,
       notes: notes ?? this.notes,
       verificationData: verificationData ?? this.verificationData,
+      subLevels: subLevels ?? this.subLevels,
     );
   }
 

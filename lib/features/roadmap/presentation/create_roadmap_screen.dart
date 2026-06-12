@@ -15,21 +15,118 @@ import '../../../shared/providers/roadmap_provider.dart';
 import '../../../shared/widgets/stepup_button.dart';
 import '../../../shared/widgets/stepup_input.dart';
 
+// ─── Proof type cycle order ──────────────────────────────────────
+const _kProofCycleOrder = ['quiz', 'photo', 'code', 'timer', 'screenshot'];
+
+String _nextProofType(String current) {
+  final idx = _kProofCycleOrder.indexOf(current);
+  return _kProofCycleOrder[(idx + 1) % _kProofCycleOrder.length];
+}
+
+IconData _proofIcon(String pt) {
+  switch (pt) {
+    case 'quiz': return Icons.quiz_outlined;
+    case 'photo': return Icons.camera_alt_outlined;
+    case 'code': return Icons.code_rounded;
+    case 'timer': return Icons.timer_outlined;
+    case 'screenshot': return Icons.screenshot_monitor_outlined;
+    default: return Icons.edit_outlined;
+  }
+}
+
+Color _proofColor(String pt) {
+  switch (pt) {
+    case 'quiz': return const Color(0xFF7B6EF6);
+    case 'photo': return const Color(0xFF4A9EFF);
+    case 'code': return const Color(0xFF2DD4BF);
+    case 'timer': return const Color(0xFFFFB156);
+    case 'screenshot': return const Color(0xFFFF6B9D);
+    default: return const Color(0xFF9898B8);
+  }
+}
+
+// ─── ProofTypeCycleChip ──────────────────────────────────────────
+class _ProofTypeCycleChip extends StatelessWidget {
+  final String proofType;
+  final VoidCallback onCycle;
+
+  const _ProofTypeCycleChip({required this.proofType, required this.onCycle});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _proofColor(proofType);
+    final icon = _proofIcon(proofType);
+    return GestureDetector(
+      onTap: onCycle,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: color.withOpacity(0.6), width: 1),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 13, color: color),
+            const SizedBox(width: 5),
+            Text(
+              proofType,
+              style: GoogleFonts.spaceMono(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.swap_horiz_rounded, size: 12, color: color.withOpacity(0.7)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Manual Sub-Level Data ───────────────────────────────────────
+class _ManualSubLevel {
+  final TextEditingController controller;
+  String proofType;
+
+  _ManualSubLevel({required String title, String initialProofType = 'quiz'})
+      : controller = TextEditingController(text: title),
+        proofType = initialProofType;
+
+  void dispose() => controller.dispose();
+}
+
+// ─── Manual Level Data ───────────────────────────────────────────
+class _ManualLevel {
+  final TextEditingController controller;
+  String proofType;
+  final List<_ManualSubLevel> subLevels;
+  bool isExpanded;
+
+  _ManualLevel({
+    required String title,
+    this.proofType = 'quiz',
+    this.isExpanded = false,
+  })  : controller = TextEditingController(text: title),
+        subLevels = [];
+
+  void dispose() {
+    controller.dispose();
+    for (final s in subLevels) {
+      s.dispose();
+    }
+  }
+}
+
+// ─── Main Screen ─────────────────────────────────────────────────
 class CreateRoadmapScreen extends ConsumerStatefulWidget {
   const CreateRoadmapScreen({super.key});
   @override
   ConsumerState<CreateRoadmapScreen> createState() => _CreateRoadmapScreenState();
-}
-
-class _ManualLevel {
-  final TextEditingController controller;
-  String proofType; // 'quiz', 'timer', 'code'
-  _ManualLevel({required String title, required this.proofType})
-      : controller = TextEditingController(text: title);
-
-  void dispose() {
-    controller.dispose();
-  }
 }
 
 class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
@@ -37,18 +134,18 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
   late TabController _tabController;
   final _titleCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
-  
+
   // AI Goal inputs
   final _aiGoalTitleCtrl = TextEditingController();
   final _aiGoalDescCtrl = TextEditingController();
 
   String _selectedType = 'study';
+  String _mapStyle = 'simple'; // 'simple' or 'sublevels'
   bool _examMode = false;
   DateTime? _deadline;
-  String _source = 'manual'; // manual / ai
   String _titleError = '';
   String _aiTitleError = '';
-  
+
   // Manual Levels
   final List<_ManualLevel> _manualLevels = [
     _ManualLevel(title: 'Level 1: Introduction', proofType: 'quiz')
@@ -56,7 +153,7 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
 
   // AI Loading & Preview States
   bool _isGeneratingAI = false;
-  bool _isCreating = false; // Separate from provider isLoading for button UX
+  bool _isCreating = false;
   int _loadingMsgIdx = 0;
   Timer? _loadingTimer;
   List<Map<String, dynamic>>? _generatedLevelsPreview;
@@ -79,9 +176,6 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _tabController.addListener(() => setState(() {
-      _source = _tabController.index == 0 ? 'manual' : 'ai';
-    }));
   }
 
   @override
@@ -256,7 +350,6 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
       _loadingMsgIdx = 0;
     });
 
-    // Animate loading text
     _loadingTimer = Timer.periodic(const Duration(milliseconds: 1000), (timer) {
       if (mounted && _isGeneratingAI) {
         setState(() {
@@ -266,12 +359,10 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
     });
 
     try {
-      // ── Check for user-stored OpenAI API key ─────────────────
       final prefs = await SharedPreferences.getInstance();
       final apiKey = prefs.getString('openai_api_key') ?? '';
 
       if (apiKey.isNotEmpty) {
-        // ── Real OpenAI call ──────────────────────────────────
         final openAiDio = Dio(BaseOptions(
           connectTimeout: const Duration(seconds: 20),
           receiveTimeout: const Duration(seconds: 30),
@@ -320,7 +411,6 @@ Rules:
           },
         );
         final content = aiResponse.data['choices'][0]['message']['content'] as String;
-        // Strip possible markdown code fences
         final cleaned = content
             .replaceAll('```json', '')
             .replaceAll('```', '')
@@ -342,13 +432,11 @@ Rules:
         return;
       }
 
-      // ── No API key: use smart local templates ─────────────
       throw Exception('no_key');
     } catch (_) {
-      // Fallback: local template with short simulated delay
       await Future.delayed(const Duration(milliseconds: 800));
       final levels = _generateSmartRoadmap(
-        title, _aiGoalDescCtrl.text.trim(), _selectedType);
+        _aiGoalTitleCtrl.text.trim(), _aiGoalDescCtrl.text.trim(), _selectedType);
       if (mounted) {
         setState(() {
           _isGeneratingAI = false;
@@ -372,7 +460,6 @@ Rules:
     final title = _aiGoalTitleCtrl.text.trim();
     final description = _aiGoalDescCtrl.text.trim();
 
-    // Read updated level titles from preview controllers
     final List<Map<String, dynamic>> finalizedLevels = [];
     for (int i = 0; i < _generatedLevelsPreview!.length; i++) {
       final item = Map<String, dynamic>.from(_generatedLevelsPreview![i]);
@@ -387,6 +474,7 @@ Rules:
           : 'AI generated roadmap for $title',
       'type': _selectedType,
       'source': 'ai',
+      'mapStyle': _mapStyle,
       'examMode': false,
       'levels': finalizedLevels,
     };
@@ -422,11 +510,11 @@ Rules:
       _isCreating = true;
     });
 
-    // Format levels
+    // Build levels payload (with subLevels if mapStyle == 'sublevels')
     final levelsPayload = _manualLevels.asMap().entries.map((entry) {
       final index = entry.key;
       final lvl = entry.value;
-      return {
+      final baseLevel = {
         'levelNumber': index + 1,
         'title': lvl.controller.text.trim().isNotEmpty
             ? lvl.controller.text.trim()
@@ -436,6 +524,21 @@ Rules:
         'estimatedMinutes': 45,
         'xpReward': 100,
       };
+      if (_mapStyle == 'sublevels' && lvl.subLevels.isNotEmpty) {
+        baseLevel['subLevels'] = lvl.subLevels.asMap().entries.map((se) {
+          return {
+            'id': 'sub-${se.key}',
+            'title': se.value.controller.text.trim().isNotEmpty
+                ? se.value.controller.text.trim()
+                : 'Sub-topic ${se.key + 1}',
+            'description': '',
+            'proofType': se.value.proofType,
+            'orderIndex': se.key,
+            'isCompleted': false,
+          };
+        }).toList();
+      }
+      return baseLevel;
     }).toList();
 
     final payload = {
@@ -443,6 +546,7 @@ Rules:
       'description': _descCtrl.text.trim(),
       'type': _selectedType,
       'source': 'manual',
+      'mapStyle': _mapStyle,
       'examMode': _examMode,
       if (_deadline != null) 'deadline': _deadline!.toIso8601String(),
       'levels': levelsPayload,
@@ -462,12 +566,94 @@ Rules:
     }
   }
 
+  // ─── Map Style Selector ─────────────────────────────────────────
+  Widget _buildMapStyleSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Map Style', style: AppTextStyles.label),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(child: _MapStyleCard(
+              title: 'Simple Levels',
+              description: 'One level at a time, step by step',
+              icon: _LinearChainIcon(color: _mapStyle == 'simple' ? AppColors.brand : AppColors.textMuted),
+              isSelected: _mapStyle == 'simple',
+              onTap: () => setState(() => _mapStyle = 'simple'),
+            )),
+            const SizedBox(width: 10),
+            Expanded(child: _MapStyleCard(
+              title: 'Topics & Sub-topics',
+              description: 'Main topics with detailed sub-tasks',
+              example: 'Arrays → Two Pointer, Sliding Window',
+              icon: _BranchTreeIcon(color: _mapStyle == 'sublevels' ? AppColors.brand : AppColors.textMuted),
+              isSelected: _mapStyle == 'sublevels',
+              onTap: () => setState(() => _mapStyle = 'sublevels'),
+            )),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // ─── Manual Level List ──────────────────────────────────────────
+  Widget _buildManualLevelList() {
+    return ReorderableListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _manualLevels.length,
+      itemBuilder: (ctx, index) {
+        final lvl = _manualLevels[index];
+        return _ManualLevelTile(
+          key: ValueKey(lvl),
+          lvl: lvl,
+          index: index,
+          showSubLevels: _mapStyle == 'sublevels',
+          onDelete: () {
+            if (_manualLevels.length > 1) {
+              setState(() {
+                lvl.dispose();
+                _manualLevels.removeAt(index);
+              });
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('At least 1 level is required')),
+              );
+            }
+          },
+          onProofTypeCycle: () => setState(() {
+            lvl.proofType = _nextProofType(lvl.proofType);
+          }),
+          onToggleExpanded: () => setState(() {
+            lvl.isExpanded = !lvl.isExpanded;
+          }),
+          onAddSubLevel: () => setState(() {
+            lvl.subLevels.add(_ManualSubLevel(title: 'Sub-topic ${lvl.subLevels.length + 1}'));
+          }),
+          onDeleteSubLevel: (si) => setState(() {
+            lvl.subLevels[si].dispose();
+            lvl.subLevels.removeAt(si);
+          }),
+          onSubProofCycle: (si) => setState(() {
+            lvl.subLevels[si].proofType = _nextProofType(lvl.subLevels[si].proofType);
+          }),
+          onRebuild: () => setState(() {}),
+        );
+      },
+      onReorder: (oldIdx, newIdx) {
+        setState(() {
+          if (newIdx > oldIdx) newIdx -= 1;
+          final item = _manualLevels.removeAt(oldIdx);
+          _manualLevels.insert(newIdx, item);
+        });
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Use local _isCreating instead of provider isLoading for button state
-    // so only the tapped button spins, not every button on the page.
     final roadmapState = ref.watch(roadmapProvider);
-    // Re-use provider error if needed
     if (roadmapState.error != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && !_isCreating) {
@@ -513,7 +699,7 @@ Rules:
       return Scaffold(
         backgroundColor: const Color(0xFF0A0A0F),
         appBar: AppBar(
-          title: Text('Preview Roadmap Map', style: AppTextStyles.h3),
+          title: Text('Preview Roadmap', style: AppTextStyles.h3),
           backgroundColor: Colors.transparent,
           leading: IconButton(
             icon: const Icon(Icons.close, color: AppColors.textPrimary),
@@ -526,7 +712,7 @@ Rules:
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Customize your milestone titles below before creating:',
+                Text('Customize your milestone titles before creating:',
                     style: GoogleFonts.inter(
                         fontSize: 14, color: AppColors.textSecondary)),
                 const SizedBox(height: 16),
@@ -577,16 +763,12 @@ Rules:
                                     ),
                                   ),
                                   const SizedBox(height: 4),
-                                  Row(
-                                    children: [
-                                      Text(
-                                        '$proof • ${mins}m • $xp XP',
-                                        style: GoogleFonts.inter(
-                                          fontSize: 11,
-                                          color: AppColors.textMuted,
-                                        ),
-                                      ),
-                                    ],
+                                  Text(
+                                    '$proof • ${mins}m • $xp XP',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      color: AppColors.textMuted,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -599,7 +781,7 @@ Rules:
                 ),
                 const SizedBox(height: 16),
                 StepUpButton(
-                  label: _isCreating ? 'Saving Roadmap...' : 'Save & Start Roadmap Map 🚀',
+                  label: _isCreating ? 'Saving Roadmap...' : 'Save & Start Roadmap 🚀',
                   isLoading: _isCreating,
                   onPressed: _isCreating ? null : _saveAI,
                 ),
@@ -635,7 +817,7 @@ Rules:
       body: TabBarView(
         controller: _tabController,
         children: [
-          // Manual Tab
+          // ── Manual Tab ─────────────────────────────────────────
           SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.all(AppSpacing.pagePadding),
@@ -657,6 +839,8 @@ Rules:
                   maxLines: 2,
                 ).animate().fadeIn(delay: 150.ms),
                 const SizedBox(height: AppSpacing.xl),
+
+                // Category
                 Text('Category', style: AppTextStyles.label).animate().fadeIn(delay: 200.ms),
                 const SizedBox(height: AppSpacing.sm),
                 Wrap(
@@ -689,8 +873,12 @@ Rules:
                   }).toList(),
                 ).animate().fadeIn(delay: 200.ms),
                 const SizedBox(height: AppSpacing.xl),
-                
-                // Add Levels Section
+
+                // Map Style Selector
+                _buildMapStyleSelector().animate().fadeIn(delay: 220.ms),
+                const SizedBox(height: AppSpacing.xl),
+
+                // Milestones header
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -714,95 +902,11 @@ Rules:
                 ).animate().fadeIn(delay: 250.ms),
                 const SizedBox(height: AppSpacing.sm),
 
-                // Drag to reorder list of levels
                 if (_manualLevels.isNotEmpty)
-                  ReorderableListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: _manualLevels.length,
-                    itemBuilder: (ctx, index) {
-                      final lvl = _manualLevels[index];
-                      return Container(
-                        key: ValueKey(lvl),
-                        margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF12121A),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFF1E1E2E)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.drag_indicator, color: AppColors.textMuted, size: 20),
-                            const SizedBox(width: 8),
-                            CircleAvatar(
-                              radius: 12,
-                              backgroundColor: AppColors.brand.withOpacity(0.15),
-                              child: Text(
-                                '${index + 1}',
-                                style: GoogleFonts.syne(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.brand),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: TextField(
-                                controller: lvl.controller,
-                                style: GoogleFonts.inter(fontSize: 14, color: Colors.white),
-                                decoration: const InputDecoration(
-                                  border: InputBorder.none,
-                                  isDense: true,
-                                  contentPadding: EdgeInsets.zero,
-                                  hintText: 'Level title',
-                                  hintStyle: TextStyle(color: AppColors.textMuted),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            DropdownButton<String>(
-                              value: lvl.proofType,
-                              dropdownColor: const Color(0xFF12121A),
-                              underline: const SizedBox(),
-                              items: const [
-                                DropdownMenuItem(value: 'quiz', child: Text('Quiz 📝', style: TextStyle(fontSize: 13))),
-                                DropdownMenuItem(value: 'timer', child: Text('Timer ⏱️', style: TextStyle(fontSize: 13))),
-                                DropdownMenuItem(value: 'code', child: Text('Code 💻', style: TextStyle(fontSize: 13))),
-                              ],
-                              onChanged: (val) {
-                                if (val != null) {
-                                  setState(() => lvl.proofType = val);
-                                }
-                              },
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 18),
-                              onPressed: () {
-                                if (_manualLevels.length > 1) {
-                                  setState(() {
-                                    lvl.dispose();
-                                    _manualLevels.removeAt(index);
-                                  });
-                                } else {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('At least 1 level is required')),
-                                  );
-                                }
-                              },
-                            )
-                          ],
-                        ),
-                      );
-                    },
-                    onReorder: (oldIdx, newIdx) {
-                      setState(() {
-                        if (newIdx > oldIdx) newIdx -= 1;
-                        final item = _manualLevels.removeAt(oldIdx);
-                        _manualLevels.insert(newIdx, item);
-                      });
-                    },
-                  ).animate().fadeIn(delay: 260.ms),
+                  _buildManualLevelList().animate().fadeIn(delay: 260.ms),
 
                 const SizedBox(height: AppSpacing.base),
-                
+
                 // Exam Mode Switch
                 Row(
                   children: [
@@ -818,12 +922,11 @@ Rules:
                     Switch(
                       value: _examMode,
                       onChanged: (val) => setState(() => _examMode = val),
-                      activeColor: AppColors.brand,
+                      activeThumbColor: AppColors.brand,
                     ),
                   ],
                 ).animate().fadeIn(delay: 280.ms),
-                
-                // Deadline Date Picker
+
                 if (_examMode) ...[
                   const SizedBox(height: AppSpacing.md),
                   GestureDetector(
@@ -865,7 +968,7 @@ Rules:
 
                 const SizedBox(height: AppSpacing.xxxl),
                 StepUpButton(
-                  label: _isCreating ? 'Creating Roadmap...' : 'Create Roadmap Map 🚀',
+                  label: _isCreating ? 'Creating Roadmap...' : 'Create Roadmap 🚀',
                   isLoading: _isCreating,
                   onPressed: _isCreating ? null : _createManual,
                 ).animate().fadeIn(delay: 350.ms),
@@ -873,7 +976,7 @@ Rules:
             ),
           ),
 
-          // AI Generate Tab
+          // ── AI Generate Tab ────────────────────────────────────
           SingleChildScrollView(
             padding: const EdgeInsets.all(AppSpacing.pagePadding),
             child: Column(
@@ -885,21 +988,14 @@ Rules:
                   future: SharedPreferences.getInstance().then(
                     (prefs) => prefs.getString('openai_api_key') ?? ''),
                   builder: (ctx, snap) {
-                    final hasKey =
-                        (snap.data ?? '').isNotEmpty;
+                    final hasKey = (snap.data ?? '').isNotEmpty;
                     return Container(
                       padding: const EdgeInsets.all(AppSpacing.base),
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: hasKey
-                              ? [
-                                  const Color(0xFF0D2B1A),
-                                  const Color(0xFF12121A)
-                                ]
-                              : [
-                                  const Color(0xFF1A1040),
-                                  const Color(0xFF12121A)
-                                ],
+                              ? [const Color(0xFF0D2B1A), const Color(0xFF12121A)]
+                              : [const Color(0xFF1A1040), const Color(0xFF12121A)],
                         ),
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
@@ -910,9 +1006,10 @@ Rules:
                       ),
                       child: Row(
                         children: [
-                          Text(
-                            hasKey ? '✅' : '✨',
-                            style: const TextStyle(fontSize: 24),
+                          Icon(
+                            hasKey ? Icons.check_circle_rounded : Icons.auto_awesome_rounded,
+                            color: hasKey ? AppColors.green : AppColors.brand,
+                            size: 28,
                           ),
                           const SizedBox(width: AppSpacing.md),
                           Expanded(
@@ -920,15 +1017,11 @@ Rules:
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  hasKey
-                                      ? 'OpenAI API active'
-                                      : 'Smart Local Generation',
+                                  hasKey ? 'OpenAI API active' : 'Smart Local Generation',
                                   style: GoogleFonts.spaceMono(
                                     fontSize: 13,
                                     fontWeight: FontWeight.bold,
-                                    color: hasKey
-                                        ? AppColors.green
-                                        : AppColors.textPrimary,
+                                    color: hasKey ? AppColors.green : AppColors.textPrimary,
                                   ),
                                 ),
                                 const SizedBox(height: 2),
@@ -941,22 +1034,20 @@ Rules:
                                     color: AppColors.textSecondary,
                                   ),
                                 ),
-                                if (!hasKey) ...
-                                  [
-                                    const SizedBox(height: 6),
-                                    GestureDetector(
-                                      onTap: () =>
-                                          context.push(AppRoutes.settings),
-                                      child: Text(
-                                        'Add OpenAI key →',
-                                        style: GoogleFonts.inter(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          color: AppColors.brand,
-                                        ),
+                                if (!hasKey) ...[
+                                  const SizedBox(height: 6),
+                                  GestureDetector(
+                                    onTap: () => context.push(AppRoutes.settings),
+                                    child: Text(
+                                      'Add OpenAI key →',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.brand,
                                       ),
                                     ),
-                                  ],
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -1011,6 +1102,8 @@ Rules:
                     );
                   }).toList(),
                 ),
+                const SizedBox(height: AppSpacing.xl),
+                _buildMapStyleSelector(),
                 const SizedBox(height: AppSpacing.xxxl),
                 StepUpButton(
                   label: 'Generate with AI ✨',
@@ -1018,6 +1111,357 @@ Rules:
                   onPressed: _isGeneratingAI ? null : _generateAI,
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Map Style Card ──────────────────────────────────────────────
+class _MapStyleCard extends StatelessWidget {
+  final String title;
+  final String description;
+  final String? example;
+  final Widget icon;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _MapStyleCard({
+    required this.title,
+    required this.description,
+    this.example,
+    required this.icon,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.brand.withOpacity(0.12)
+              : const Color(0xFF12121A),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? AppColors.brand : const Color(0xFF1E1E2E),
+            width: isSelected ? 1.5 : 1,
+          ),
+          boxShadow: isSelected
+              ? [BoxShadow(color: AppColors.brand.withOpacity(0.2), blurRadius: 12)]
+              : null,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            icon,
+            const SizedBox(height: 10),
+            Text(
+              title,
+              style: GoogleFonts.spaceMono(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: isSelected ? AppColors.brand : AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              description,
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                color: AppColors.textSecondary,
+                height: 1.4,
+              ),
+            ),
+            if (example != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                example!,
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  color: AppColors.textMuted,
+                  fontStyle: FontStyle.italic,
+                  height: 1.3,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Linear Chain Icon ───────────────────────────────────────────
+class _LinearChainIcon extends StatelessWidget {
+  final Color color;
+  const _LinearChainIcon({required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 10, height: 10,
+          decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: color, width: 2)),
+        ),
+        Container(height: 2, width: 8, color: color),
+        Container(
+          width: 10, height: 10,
+          decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: color, width: 2)),
+        ),
+        Container(height: 2, width: 8, color: color),
+        Container(
+          width: 10, height: 10,
+          decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: color, width: 2)),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Branch Tree Icon ────────────────────────────────────────────
+class _BranchTreeIcon extends StatelessWidget {
+  final Color color;
+  const _BranchTreeIcon({required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 38, height: 24,
+      child: CustomPaint(painter: _BranchPainter(color: color)),
+    );
+  }
+}
+
+class _BranchPainter extends CustomPainter {
+  final Color color;
+  const _BranchPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+    final fill = Paint()..color = color..style = PaintingStyle.fill;
+
+    // Root node
+    canvas.drawCircle(Offset(6, size.height / 2), 4, fill);
+    // Main trunk
+    canvas.drawLine(Offset(10, size.height / 2), Offset(18, size.height / 2), paint);
+    // Branch up
+    canvas.drawLine(Offset(18, size.height / 2), Offset(22, 4), paint);
+    canvas.drawCircle(Offset(26, 4), 3.5, paint);
+    // Branch middle
+    canvas.drawLine(Offset(18, size.height / 2), Offset(26, size.height / 2), paint);
+    canvas.drawCircle(Offset(30, size.height / 2), 3.5, paint);
+    // Branch down
+    canvas.drawLine(Offset(18, size.height / 2), Offset(22, size.height - 4), paint);
+    canvas.drawCircle(Offset(26, size.height - 4), 3.5, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _BranchPainter old) => old.color != color;
+}
+
+// ─── Manual Level Tile ───────────────────────────────────────────
+class _ManualLevelTile extends StatelessWidget {
+  final _ManualLevel lvl;
+  final int index;
+  final bool showSubLevels;
+  final VoidCallback onDelete;
+  final VoidCallback onProofTypeCycle;
+  final VoidCallback onToggleExpanded;
+  final VoidCallback onAddSubLevel;
+  final void Function(int) onDeleteSubLevel;
+  final void Function(int) onSubProofCycle;
+  final VoidCallback onRebuild;
+
+  const _ManualLevelTile({
+    required super.key,
+    required this.lvl,
+    required this.index,
+    required this.showSubLevels,
+    required this.onDelete,
+    required this.onProofTypeCycle,
+    required this.onToggleExpanded,
+    required this.onAddSubLevel,
+    required this.onDeleteSubLevel,
+    required this.onSubProofCycle,
+    required this.onRebuild,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF12121A),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF1E1E2E)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Main level row
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              children: [
+                const Icon(Icons.drag_indicator, color: AppColors.textMuted, size: 20),
+                const SizedBox(width: 8),
+                CircleAvatar(
+                  radius: 12,
+                  backgroundColor: AppColors.brand.withOpacity(0.15),
+                  child: Text(
+                    '${index + 1}',
+                    style: GoogleFonts.syne(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.brand),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: lvl.controller,
+                    style: GoogleFonts.inter(fontSize: 14, color: Colors.white),
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                      hintText: 'Level title',
+                      hintStyle: TextStyle(color: AppColors.textMuted),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                _ProofTypeCycleChip(
+                  proofType: lvl.proofType,
+                  onCycle: onProofTypeCycle,
+                ),
+                if (showSubLevels) ...[
+                  const SizedBox(width: 4),
+                  GestureDetector(
+                    onTap: onToggleExpanded,
+                    child: Icon(
+                      lvl.isExpanded ? Icons.expand_less : Icons.expand_more,
+                      color: AppColors.textMuted,
+                      size: 20,
+                    ),
+                  ),
+                ],
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 18),
+                  onPressed: onDelete,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  padding: EdgeInsets.zero,
+                ),
+              ],
+            ),
+          ),
+
+          // Sub-levels section (only in sublevels mode + expanded)
+          if (showSubLevels && lvl.isExpanded) ...[
+            const Divider(height: 1, color: Color(0xFF1E1E2E)),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (int si = 0; si < lvl.subLevels.length; si++)
+                    _SubLevelRow(
+                      subLevel: lvl.subLevels[si],
+                      label: '${index + 1}.${si + 1}',
+                      onDelete: () => onDeleteSubLevel(si),
+                      onProofCycle: () => onSubProofCycle(si),
+                    ),
+                  const SizedBox(height: 6),
+                  GestureDetector(
+                    onTap: onAddSubLevel,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.add_circle_outline, size: 14, color: AppColors.brand.withOpacity(0.8)),
+                        const SizedBox(width: 6),
+                        Text(
+                          '+ Add Sub-topic',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: AppColors.brand,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Sub-Level Row ───────────────────────────────────────────────
+class _SubLevelRow extends StatelessWidget {
+  final _ManualSubLevel subLevel;
+  final String label;
+  final VoidCallback onDelete;
+  final VoidCallback onProofCycle;
+
+  const _SubLevelRow({
+    required this.subLevel,
+    required this.label,
+    required this.onDelete,
+    required this.onProofCycle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 32,
+            child: Text(
+              label,
+              style: GoogleFonts.spaceMono(
+                fontSize: 10,
+                color: AppColors.brand.withOpacity(0.8),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          Expanded(
+            child: TextField(
+              controller: subLevel.controller,
+              style: GoogleFonts.inter(fontSize: 13, color: AppColors.textPrimary),
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+                hintText: 'Sub-topic title',
+                hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 13),
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          _ProofTypeCycleChip(proofType: subLevel.proofType, onCycle: onProofCycle),
+          GestureDetector(
+            onTap: onDelete,
+            child: const Padding(
+              padding: EdgeInsets.only(left: 6),
+              child: Icon(Icons.close, size: 14, color: AppColors.error),
             ),
           ),
         ],

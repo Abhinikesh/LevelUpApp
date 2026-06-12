@@ -104,7 +104,6 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
   final Ref ref;
   DashboardNotifier(this.ref) : super(const DashboardState());
 
-  static const _cachedUserKey = 'cached_user';
   static const _cachedActiveRoadmapKey = 'cached_active_roadmap';
 
   Future<void> loadDashboard() async {

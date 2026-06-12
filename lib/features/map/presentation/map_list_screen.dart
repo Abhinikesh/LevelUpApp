@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -282,7 +283,7 @@ class _MapListScreenState extends ConsumerState<MapListScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Text('🗺️', style: TextStyle(fontSize: 56)),
+          _EmptyStateMapWidget(),
           const SizedBox(height: 16),
           Text(
             'No roadmaps yet',
@@ -332,8 +333,130 @@ class _MapListScreenState extends ConsumerState<MapListScreen> {
   }
 }
 
+// ─── Empty State Map Widget ──────────────────────────────────────
+class _EmptyStateMapWidget extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 180,
+      height: 140,
+      child: CustomPaint(
+        painter: _WindingRoadmapPainter(),
+      ),
+    );
+  }
+}
+
+class _WindingRoadmapPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final pathPaint = Paint()
+      ..color = AppColors.brand.withValues(alpha: 0.2)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 6.0
+      ..strokeCap = StrokeCap.round;
+
+    final dashPaint = Paint()
+      ..color = AppColors.brand
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0
+      ..strokeCap = StrokeCap.round;
+
+    // Draw winding pathway path
+    final path = Path()
+      ..moveTo(20, size.height - 20)
+      ..cubicTo(size.width * 0.2, size.height * 0.8, size.width * 0.1, size.height * 0.3, size.width * 0.5, size.height * 0.4)
+      ..cubicTo(size.width * 0.8, size.height * 0.5, size.width * 0.7, size.height * 0.1, size.width - 20, 20);
+
+    canvas.drawPath(path, pathPaint);
+
+    // Draw nodes on path
+    final nodePaint = Paint()
+      ..color = AppColors.brand
+      ..style = PaintingStyle.fill;
+
+    final activeNodePaint = Paint()
+      ..color = AppColors.green
+      ..style = PaintingStyle.fill;
+
+    canvas.drawCircle(const Offset(35, 110), 8, nodePaint);
+    canvas.drawCircle(const Offset(90, 75), 8, nodePaint);
+    canvas.drawCircle(const Offset(140, 35), 8, activeNodePaint);
+
+    // Draw some stars
+    final starPaint = Paint()
+      ..color = AppColors.gold
+      ..style = PaintingStyle.fill;
+
+    _drawStar(canvas, const Offset(30, 30), 6, starPaint);
+    _drawStar(canvas, const Offset(150, 110), 4, starPaint);
+    _drawStar(canvas, const Offset(100, 20), 5, starPaint);
+  }
+
+  void _drawStar(Canvas canvas, Offset center, double radius, Paint paint) {
+    final path = Path();
+    for (int i = 0; i < 5; i++) {
+      double angle = i * 4 * pi / 5 - pi / 2;
+      double x = center.dx + radius * (i % 2 == 0 ? 1.0 : 0.4) * cos(angle);
+      double y = center.dy + radius * (i % 2 == 0 ? 1.0 : 0.4) * sin(angle);
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    path.close();
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// ─── Style Chip for Map style selector ────────────────────────────
+class _StyleChip extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _StyleChip({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.brand.withValues(alpha: 0.15)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? AppColors.brand : AppColors.border,
+            width: 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.spaceMono(
+            fontSize: 9,
+            fontWeight: FontWeight.bold,
+            color: isSelected ? AppColors.brand : AppColors.textMuted,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ─── Roadmap List Card ─────────────────────────────────────────
-class _RoadmapListCard extends StatelessWidget {
+class _RoadmapListCard extends ConsumerWidget {
   final RoadmapModel roadmap;
   const _RoadmapListCard({required this.roadmap});
 
@@ -351,7 +474,7 @@ class _RoadmapListCard extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final color = _accentColor;
     final progress = roadmap.progressPercent;
 
@@ -359,7 +482,7 @@ class _RoadmapListCard extends StatelessWidget {
       onTap: () => context.push('${AppRoutes.map}/${roadmap.id}'),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
-        constraints: const BoxConstraints(minHeight: 90),
+        constraints: const BoxConstraints(minHeight: 110),
         decoration: BoxDecoration(
           color: AppColors.bgCard,
           borderRadius: BorderRadius.circular(16),
@@ -420,7 +543,34 @@ class _RoadmapListCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
+                      // Map style choice chips
+                      Row(
+                        children: [
+                          _StyleChip(
+                            label: 'Simple',
+                            isSelected: roadmap.mapStyle == 'simple',
+                            onTap: () {
+                              if (roadmap.mapStyle != 'simple') {
+                                final updated = roadmap.copyWith(mapStyle: 'simple');
+                                ref.read(roadmapProvider.notifier).updateRoadmapLocally(updated);
+                              }
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          _StyleChip(
+                            label: 'Topics',
+                            isSelected: roadmap.mapStyle == 'sublevels',
+                            onTap: () {
+                              if (roadmap.mapStyle != 'sublevels') {
+                                final updated = roadmap.copyWith(mapStyle: 'sublevels');
+                                ref.read(roadmapProvider.notifier).updateRoadmapLocally(updated);
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
                       // Progress subtitle
                       Text(
                         'Level ${roadmap.currentLevel} of ${roadmap.totalLevels} • ${(progress * 100).toInt()}% complete',

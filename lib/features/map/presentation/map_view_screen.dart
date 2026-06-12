@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,6 +13,7 @@ import '../../../shared/providers/roadmap_provider.dart';
 
 // ─── Constants ──────────────────────────────────────────────────
 const double _kNodeSize = 80.0;
+const double _kSubNodeSize = 48.0;
 const double _kNodeSpacing = 110.0;
 const String _kBgPrefKey = 'map_bg_theme';
 
@@ -122,7 +122,6 @@ class _MapViewScreenState extends ConsumerState<MapViewScreen>
       vsync: this,
       duration: const Duration(milliseconds: 2000),
     );
-    // Delay second ring by 0.5s (500ms / 2000ms = 0.25 normalized)
     Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted) _pulse2Ctrl.repeat();
     });
@@ -254,6 +253,7 @@ class _MapViewScreenState extends ConsumerState<MapViewScreen>
                       pulseCtrl: _pulseCtrl,
                       pulse2Ctrl: _pulse2Ctrl,
                       roadmapId: widget.roadmapId,
+                      hasSubLevels: roadmap?.hasSubLevels ?? false,
                     ),
                   ),
                 ),
@@ -447,10 +447,34 @@ class _MapTopBarDelegate extends SliverPersistentHeaderDelegate {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    Text(
-                      'Level ${roadmap?.currentLevel ?? 0} of ${roadmap?.totalLevels ?? 0}',
-                      style: GoogleFonts.inter(
-                          fontSize: 12, color: AppColors.textSecondary),
+                    Row(
+                      children: [
+                        Text(
+                          'Level ${roadmap?.currentLevel ?? 0} of ${roadmap?.totalLevels ?? 0}',
+                          style: GoogleFonts.inter(
+                              fontSize: 12, color: AppColors.textSecondary),
+                        ),
+                        if (roadmap?.hasSubLevels == true) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: AppColors.brand.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppColors.brand.withValues(alpha: 0.4)),
+                            ),
+                            child: Text(
+                              'TOPICS',
+                              style: GoogleFonts.spaceMono(
+                                fontSize: 8,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.brand,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ],
                 ),
@@ -506,26 +530,23 @@ class _MapBody extends StatelessWidget {
   final AnimationController pulseCtrl;
   final AnimationController pulse2Ctrl;
   final String roadmapId;
+  final bool hasSubLevels;
 
   const _MapBody({
     required this.levels,
     required this.pulseCtrl,
     required this.pulse2Ctrl,
     required this.roadmapId,
+    required this.hasSubLevels,
   });
 
   double _xOffsetForIndex(int idx) {
     switch (idx % 4) {
-      case 0:
-        return 0.0;
-      case 1:
-        return 80.0;
-      case 2:
-        return 0.0;
-      case 3:
-        return -80.0;
-      default:
-        return 0.0;
+      case 0: return 0.0;
+      case 1: return 80.0;
+      case 2: return 0.0;
+      case 3: return -80.0;
+      default: return 0.0;
     }
   }
 
@@ -545,12 +566,12 @@ class _MapBody extends StatelessWidget {
               world: (reversed[i].levelNumber - 1) ~/ 5 + 1,
             ).animate().fadeIn(duration: 300.ms),
 
-          // Connector
+          // Connector between nodes
           if (i > 0)
             _ConnectorWidget(
               isCompleted:
-                  reversed[i].status == LevelStatus.completed ||
-                      reversed[i - 1].status == LevelStatus.completed,
+                  reversed[i].isCompletedActual ||
+                      reversed[i - 1].isCompletedActual,
               fromX: center +
                   _xOffsetForIndex(reversed[i].levelNumber - 1) +
                   _kNodeSize / 2,
@@ -559,7 +580,7 @@ class _MapBody extends StatelessWidget {
                   _kNodeSize / 2,
             ),
 
-          // Level node
+          // Level node (with optional sub-level cluster below)
           SizedBox(
             width: double.infinity,
             child: Stack(
@@ -568,20 +589,36 @@ class _MapBody extends StatelessWidget {
                 Transform.translate(
                   offset:
                       Offset(_xOffsetForIndex(reversed[i].levelNumber - 1), 0),
-                  child: _LevelNode(
-                    level: reversed[i],
-                    pulseCtrl: pulseCtrl,
-                    pulse2Ctrl: pulse2Ctrl,
-                    roadmapId: roadmapId,
-                  )
-                      .animate()
-                      .fadeIn(
-                          delay: Duration(milliseconds: i * 55),
-                          duration: 300.ms)
-                      .scale(
-                          begin: const Offset(0.6, 0.6),
-                          delay: Duration(milliseconds: i * 55),
-                          curve: Curves.elasticOut),
+                  child: Column(
+                    children: [
+                      _LevelNode(
+                        level: reversed[i],
+                        pulseCtrl: pulseCtrl,
+                        pulse2Ctrl: pulse2Ctrl,
+                        roadmapId: roadmapId,
+                        hasSubLevels: hasSubLevels,
+                      )
+                          .animate()
+                          .fadeIn(
+                              delay: Duration(milliseconds: i * 55),
+                              duration: 300.ms)
+                          .scale(
+                              begin: const Offset(0.6, 0.6),
+                              delay: Duration(milliseconds: i * 55),
+                              curve: Curves.elasticOut),
+
+                      // ── Sub-level cluster ───────────────────
+                      if (hasSubLevels && reversed[i].subLevels.isNotEmpty)
+                        _SubLevelCluster(
+                          level: reversed[i],
+                          animDelay: i * 55,
+                        )
+                            .animate()
+                            .fadeIn(
+                                delay: Duration(milliseconds: i * 55 + 120),
+                                duration: 300.ms),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -589,6 +626,409 @@ class _MapBody extends StatelessWidget {
           const SizedBox(height: 6),
         ],
       ],
+    );
+  }
+}
+
+// ─── Sub-Level Cluster ──────────────────────────────────────────
+class _SubLevelCluster extends StatelessWidget {
+  final LevelModel level;
+  final int animDelay;
+
+  const _SubLevelCluster({required this.level, required this.animDelay});
+
+  @override
+  Widget build(BuildContext context) {
+    final subs = level.subLevels;
+    final completedCount = level.completedSubLevelCount;
+
+    return Column(
+      children: [
+        // Connector from main node to sub cluster
+        Container(
+          width: 2,
+          height: 16,
+          color: AppColors.brand.withValues(alpha: 0.3),
+        ),
+        // Sub-level nodes row
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          margin: const EdgeInsets.symmetric(horizontal: 40),
+          decoration: BoxDecoration(
+            color: AppColors.bgCard.withValues(alpha: 0.6),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: AppColors.brand.withValues(alpha: 0.2),
+            ),
+          ),
+          child: Column(
+            children: [
+              // Progress label
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.account_tree_outlined,
+                    size: 12,
+                    color: AppColors.brand.withValues(alpha: 0.7),
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    '$completedCount/${subs.length} sub-topics done',
+                    style: GoogleFonts.spaceMono(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: completedCount == subs.length
+                          ? AppColors.green
+                          : AppColors.brand.withValues(alpha: 0.8),
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              // Sub-level circles
+              Wrap(
+                spacing: 12,
+                runSpacing: 10,
+                alignment: WrapAlignment.center,
+                children: subs.asMap().entries.map((e) {
+                  final si = e.key;
+                  final sub = e.value;
+                  return _SubLevelNode(
+                    sub: sub,
+                    label: '${level.levelNumber}.${si + 1}',
+                    parentLevel: level,
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Sub-Level Node ─────────────────────────────────────────────
+class _SubLevelNode extends StatelessWidget {
+  final SubLevel sub;
+  final String label;
+  final LevelModel parentLevel;
+
+  const _SubLevelNode({
+    required this.sub,
+    required this.label,
+    required this.parentLevel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isCompleted = sub.isCompleted;
+    final isActive = !isCompleted && !parentLevel.isLocked;
+
+    Color circleColor;
+    Color borderColor;
+    Widget centerWidget;
+
+    if (isCompleted) {
+      circleColor = AppColors.green.withValues(alpha: 0.2);
+      borderColor = AppColors.green;
+      centerWidget = const Icon(Icons.check_rounded, size: 16, color: AppColors.green);
+    } else if (isActive) {
+      circleColor = AppColors.brand.withValues(alpha: 0.2);
+      borderColor = AppColors.brand;
+      centerWidget = Text(
+        label,
+        style: GoogleFonts.spaceMono(
+          fontSize: 9,
+          fontWeight: FontWeight.bold,
+          color: AppColors.brand,
+        ),
+      );
+    } else {
+      circleColor = AppColors.bgCard;
+      borderColor = AppColors.border;
+      centerWidget = const Icon(Icons.lock_outline, size: 13, color: AppColors.textMuted);
+    }
+
+    return GestureDetector(
+      onTap: () => _onTap(context, isActive, isCompleted),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: _kSubNodeSize,
+            height: _kSubNodeSize,
+            decoration: BoxDecoration(
+              color: circleColor,
+              shape: BoxShape.circle,
+              border: Border.all(color: borderColor, width: isActive ? 2 : 1.5),
+              boxShadow: isCompleted
+                  ? [BoxShadow(color: AppColors.green.withValues(alpha: 0.25), blurRadius: 10)]
+                  : isActive
+                      ? [BoxShadow(color: AppColors.brand.withValues(alpha: 0.3), blurRadius: 12)]
+                      : null,
+            ),
+            child: Center(child: centerWidget),
+          ),
+          const SizedBox(height: 4),
+          SizedBox(
+            width: 60,
+            child: Text(
+              sub.title,
+              style: GoogleFonts.inter(
+                fontSize: 9,
+                color: isActive || isCompleted
+                    ? AppColors.textPrimary
+                    : AppColors.textMuted,
+                fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _onTap(BuildContext context, bool isActive, bool isCompleted) {
+    if (!isActive && !isCompleted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.bgCard,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: const BorderSide(color: AppColors.border)),
+          content: Row(children: [
+            const Icon(Icons.lock_outline, color: AppColors.textMuted, size: 16),
+            const SizedBox(width: 8),
+            Text('Complete parent level first',
+                style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary)),
+          ]),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _SubLevelBottomSheet(
+        sub: sub,
+        parentLevel: parentLevel,
+        label: label,
+        isCompleted: isCompleted,
+      ),
+    );
+  }
+}
+
+// ─── Sub-Level Bottom Sheet ─────────────────────────────────────
+class _SubLevelBottomSheet extends StatelessWidget {
+  final SubLevel sub;
+  final LevelModel parentLevel;
+  final String label;
+  final bool isCompleted;
+
+  const _SubLevelBottomSheet({
+    required this.sub,
+    required this.parentLevel,
+    required this.label,
+    required this.isCompleted,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.50,
+      maxChildSize: 0.78,
+      minChildSize: 0.35,
+      builder: (_, controller) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.bgCard,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          border: Border(top: BorderSide(color: AppColors.border, width: 1)),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Center(
+              child: Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.borderLight,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                controller: controller,
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 28),
+                children: [
+                  // Sub-level badge
+                  Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.brand.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppColors.brand.withValues(alpha: 0.4)),
+                      ),
+                      child: Text(
+                        'SUB-TOPIC $label',
+                        style: GoogleFonts.spaceMono(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.brand,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Center(
+                    child: ShaderMask(
+                      shaderCallback: (b) => AppColors.brandGradient
+                          .createShader(Rect.fromLTWH(0, 0, b.width, b.height)),
+                      child: Text(
+                        sub.title,
+                        style: GoogleFonts.spaceMono(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Center(
+                    child: Text(
+                      'Part of: ${parentLevel.title}',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                  if (sub.description.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      sub.description,
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: AppColors.textSecondary,
+                        height: 1.5,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                  const SizedBox(height: 20),
+                  const Divider(color: AppColors.border),
+                  const SizedBox(height: 16),
+                  // Info chips
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _InfoChip(
+                        icon: Icons.quiz_outlined,
+                        label: sub.proofType,
+                        color: AppColors.brand,
+                      ),
+                      _InfoChip(
+                        icon: Icons.bolt,
+                        label: '${parentLevel.xpReward ~/ (parentLevel.subLevels.isEmpty ? 1 : parentLevel.subLevels.length)} XP',
+                        color: AppColors.gold,
+                      ),
+                    ],
+                  ),
+                  if (isCompleted) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.green.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.green.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.check_circle, color: AppColors.green, size: 16),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Sub-topic completed!',
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: AppColors.green,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.brand,
+                        side: const BorderSide(color: AppColors.brand),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        minimumSize: const Size(double.infinity, 52),
+                      ),
+                      child: Text('Close', style: GoogleFonts.spaceMono(fontWeight: FontWeight.bold)),
+                    ),
+                  ] else ...[
+                    const SizedBox(height: 24),
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.pop(context);
+                        context.push(
+                          '${AppRoutes.verification}/${sub.compositeId}/${sub.proofType}',
+                        );
+                      },
+                      child: Container(
+                        width: double.infinity,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          gradient: AppColors.brandGradient,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.brand.withValues(alpha: 0.4),
+                              blurRadius: 20,
+                              offset: const Offset(0, 8),
+                            )
+                          ],
+                        ),
+                        child: Center(
+                          child: Text(
+                            'Start Sub-topic',
+                            style: GoogleFonts.spaceMono(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -610,14 +1050,23 @@ class _WorldHeader extends StatelessWidget {
             color: AppColors.brand.withValues(alpha: 0.30), width: 1),
       ),
       child: Center(
-        child: Text(
-          '⭐  WORLD $world  ⭐',
-          style: GoogleFonts.spaceMono(
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-            color: AppColors.brand,
-            letterSpacing: 3,
-          ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.star_rounded, color: AppColors.brand, size: 16),
+            const SizedBox(width: 8),
+            Text(
+              'WORLD $world',
+              style: GoogleFonts.spaceMono(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: AppColors.brand,
+                letterSpacing: 3,
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.star_rounded, color: AppColors.brand, size: 16),
+          ],
         ),
       ),
     );
@@ -708,12 +1157,14 @@ class _LevelNode extends ConsumerWidget {
   final AnimationController pulseCtrl;
   final AnimationController pulse2Ctrl;
   final String roadmapId;
+  final bool hasSubLevels;
 
   const _LevelNode({
     required this.level,
     required this.pulseCtrl,
     required this.pulse2Ctrl,
     required this.roadmapId,
+    required this.hasSubLevels,
   });
 
   @override
@@ -723,7 +1174,6 @@ class _LevelNode extends ConsumerWidget {
       child: Column(
         children: [
           SizedBox(
-            // Enough space for glow + pulse rings (100px outer ring + label)
             width: _kNodeSize + 44,
             height: _kNodeSize + 44,
             child: Stack(
@@ -731,7 +1181,6 @@ class _LevelNode extends ConsumerWidget {
               children: [
                 // ── Active: two animated pulse rings ──────────
                 if (level.status == LevelStatus.active) ...[
-                  // Ring 1
                   AnimatedBuilder(
                     animation: pulseCtrl,
                     builder: (_, __) {
@@ -752,7 +1201,6 @@ class _LevelNode extends ConsumerWidget {
                       );
                     },
                   ),
-                  // Ring 2 (delayed)
                   AnimatedBuilder(
                     animation: pulse2Ctrl,
                     builder: (_, __) {
@@ -775,13 +1223,33 @@ class _LevelNode extends ConsumerWidget {
                   ),
                 ],
 
+                // ── Glow ring when all sub-topics done ────────
+                if (hasSubLevels && level.isCompletedActual)
+                  Container(
+                    width: _kNodeSize + 16,
+                    height: _kNodeSize + 16,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.green.withValues(alpha: 0.35),
+                          blurRadius: 24,
+                          spreadRadius: 6,
+                        ),
+                      ],
+                    ),
+                  ),
+
                 // ── Main node circle ───────────────────────────
-                _NodeCircle(status: level.status),
+                _NodeCircle(
+                  status: level.status,
+                  subProgress: hasSubLevels ? level.subLevelProgress : null,
+                ),
               ],
             ),
           ),
           // Label
-          _NodeLabel(level: level),
+          _NodeLabel(level: level, hasSubLevels: hasSubLevels),
         ],
       ),
     );
@@ -814,7 +1282,7 @@ class _LevelNode extends ConsumerWidget {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _LevelBottomSheet(
-          level: level, isCompleted: level.status == LevelStatus.completed),
+          level: level, isCompleted: level.isCompletedActual),
     );
   }
 }
@@ -822,7 +1290,9 @@ class _LevelNode extends ConsumerWidget {
 // ─── Node Circle ────────────────────────────────────────────────
 class _NodeCircle extends StatelessWidget {
   final LevelStatus status;
-  const _NodeCircle({required this.status});
+  final double? subProgress; // 0.0–1.0, null = no sub-levels
+
+  const _NodeCircle({required this.status, this.subProgress});
 
   @override
   Widget build(BuildContext context) {
@@ -847,21 +1317,49 @@ class _NodeCircle extends StatelessWidget {
         );
 
       case LevelStatus.active:
-        return Container(
-          width: _kNodeSize,
-          height: _kNodeSize,
-          decoration: BoxDecoration(
-            gradient: AppColors.brandGradient,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                  color: AppColors.brand.withValues(alpha: 0.6),
-                  blurRadius: 30,
-                  spreadRadius: 6)
-            ],
-          ),
-          child: const Icon(Icons.play_arrow_rounded,
-              color: Colors.white, size: 32),
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              width: _kNodeSize,
+              height: _kNodeSize,
+              decoration: BoxDecoration(
+                gradient: AppColors.brandGradient,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                      color: AppColors.brand.withValues(alpha: 0.6),
+                      blurRadius: 30,
+                      spreadRadius: 6)
+                ],
+              ),
+              child: subProgress != null && subProgress! > 0
+                  ? Center(
+                      child: Text(
+                        '${(subProgress! * 100).round()}%',
+                        style: GoogleFonts.spaceGrotesk(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    )
+                  : const Icon(Icons.play_arrow_rounded,
+                      color: Colors.white, size: 32),
+            ),
+            // Circular progress arc for sub-levels
+            if (subProgress != null && subProgress! > 0)
+              SizedBox(
+                width: _kNodeSize,
+                height: _kNodeSize,
+                child: CircularProgressIndicator(
+                  value: subProgress,
+                  strokeWidth: 3,
+                  backgroundColor: Colors.white.withValues(alpha: 0.2),
+                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+          ],
         );
 
       case LevelStatus.locked:
@@ -871,11 +1369,7 @@ class _NodeCircle extends StatelessWidget {
           decoration: BoxDecoration(
             color: const Color(0xFF161625),
             shape: BoxShape.circle,
-            border: Border.all(
-              color: AppColors.border,
-              width: 1.0,
-              // Simulated dashed via strokeAlign – proper dashed handled via CustomPaint below
-            ),
+            border: Border.all(color: AppColors.border, width: 1.0),
           ),
           child: const Icon(Icons.lock_outline,
               color: AppColors.textMuted, size: 24),
@@ -887,12 +1381,12 @@ class _NodeCircle extends StatelessWidget {
 // ─── Node Label ─────────────────────────────────────────────────
 class _NodeLabel extends StatelessWidget {
   final LevelModel level;
-  const _NodeLabel({required this.level});
+  final bool hasSubLevels;
+  const _NodeLabel({required this.level, required this.hasSubLevels});
 
   @override
   Widget build(BuildContext context) {
-    final numStr =
-        level.levelNumber.toString().padLeft(2, '0'); // "01", "12" etc.
+    final numStr = level.levelNumber.toString().padLeft(2, '0');
 
     return SizedBox(
       width: 120,
@@ -915,7 +1409,7 @@ class _NodeLabel extends StatelessWidget {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
-          if (level.status == LevelStatus.active)
+          if (level.status == LevelStatus.active && !hasSubLevels)
             Text(
               'TAP TO PLAY',
               style: GoogleFonts.spaceMono(
@@ -927,6 +1421,17 @@ class _NodeLabel extends StatelessWidget {
             )
                 .animate(onPlay: (c) => c.repeat(reverse: true))
                 .moveY(begin: 0, end: -3, duration: 600.ms),
+          if (hasSubLevels && level.subLevels.isNotEmpty)
+            Text(
+              '${level.completedSubLevelCount}/${level.subLevels.length} done',
+              style: GoogleFonts.spaceMono(
+                fontSize: 9,
+                color: level.isCompletedActual
+                    ? AppColors.green
+                    : AppColors.brand.withValues(alpha: 0.8),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
         ],
       ),
     );
@@ -992,7 +1497,6 @@ class _LevelBottomSheet extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 18),
-                  // Level number – gradient
                   Center(
                     child: ShaderMask(
                       shaderCallback: (b) => AppColors.brandGradient
@@ -1059,6 +1563,12 @@ class _LevelBottomSheet extends StatelessWidget {
                         label: '${level.xpReward} XP',
                         color: AppColors.gold,
                       ),
+                      if (level.subLevels.isNotEmpty)
+                        _InfoChip(
+                          icon: Icons.account_tree_outlined,
+                          label: '${level.subLevels.length} sub-topics',
+                          color: const Color(0xFFFF9F43),
+                        ),
                     ],
                   ),
 
@@ -1100,6 +1610,47 @@ class _LevelBottomSheet extends StatelessWidget {
                         minimumSize: const Size(double.infinity, 52),
                       ),
                       child: Text('Review Level',
+                          style: GoogleFonts.spaceMono(
+                              fontWeight: FontWeight.bold)),
+                    ),
+                  ] else if (level.subLevels.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppColors.brand.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppColors.brand.withValues(alpha: 0.25)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.account_tree_outlined,
+                              color: AppColors.brand, size: 18),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'This level has ${level.subLevels.length} sub-topics. Tap each sub-topic node on the map to complete them.',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                color: AppColors.textSecondary,
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.brand,
+                        side: const BorderSide(color: AppColors.brand),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                        minimumSize: const Size(double.infinity, 52),
+                      ),
+                      child: Text('View Sub-topics on Map',
                           style: GoogleFonts.spaceMono(
                               fontWeight: FontWeight.bold)),
                     ),

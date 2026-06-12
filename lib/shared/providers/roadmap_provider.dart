@@ -24,6 +24,7 @@ final _mockRoadmaps = [
     coverEmoji: '🧠',
     totalXpReward: 4500,
     xpEarned: 1200,
+    mapStyle: 'simple',
   ),
   RoadmapModel(
     id: 'mock-roadmap-002',
@@ -38,6 +39,7 @@ final _mockRoadmaps = [
     coverEmoji: '💪',
     totalXpReward: 6300,
     xpEarned: 1800,
+    mapStyle: 'simple',
   ),
   RoadmapModel(
     id: 'mock-roadmap-003',
@@ -52,6 +54,22 @@ final _mockRoadmaps = [
     coverEmoji: '🏗️',
     totalXpReward: 3000,
     xpEarned: 450,
+    mapStyle: 'simple',
+  ),
+  RoadmapModel(
+    id: 'mock-roadmap-sub-001',
+    userId: 'mock-user-001',
+    title: 'DSA: Topics & Sub-topics',
+    description: 'Master DSA topics with detailed sub-techniques — Arrays, Trees, Graphs and more.',
+    type: 'study',
+    source: 'ai',
+    totalLevels: 6,
+    currentLevel: 3,
+    createdAt: DateTime.now().subtract(const Duration(days: 7)),
+    coverEmoji: '🌿',
+    totalXpReward: 1200,
+    xpEarned: 400,
+    mapStyle: 'sublevels',
   ),
 ];
 
@@ -221,6 +239,7 @@ class RoadmapNotifier extends StateNotifier<RoadmapState> {
       coverEmoji: null,
       totalXpReward: 0,
       xpEarned: 0,
+      mapStyle: payload['mapStyle'] as String? ?? 'simple',
     );
 
     // Insert immediately into state so the UI is instant

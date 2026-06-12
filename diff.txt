@@ -1,0 +1,3191 @@
+diff --git a/lib/core/constants/app_text_styles.dart b/lib/core/constants/app_text_styles.dart
+index d75a360..189c8f5 100644
+--- a/lib/core/constants/app_text_styles.dart
++++ b/lib/core/constants/app_text_styles.dart
+@@ -130,4 +130,41 @@ class AppTextStyles {
+     fontWeight: FontWeight.w600,
+     letterSpacing: 0.3,
+   );
++
++  // ── Plan-specified aliases ────────────────────────────────────
++  /// App logo wordmark — SpaceMono 20 700 brand purple
++  static TextStyle appLogo = GoogleFonts.spaceMono(
++    fontSize: 20,
++    fontWeight: FontWeight.w700,
++    color: const Color(0xFF7B6EF6),
++  );
++
++  /// Page-level hero title — SpaceMono 22 700 near-white
++  static TextStyle pageTitle = GoogleFonts.spaceMono(
++    fontSize: 22,
++    fontWeight: FontWeight.w700,
++    color: const Color(0xFFF5F5FF),
++  );
++
++  /// Section heading — SpaceMono 16 700 near-white
++  static TextStyle sectionTitle = GoogleFonts.spaceMono(
++    fontSize: 16,
++    fontWeight: FontWeight.w700,
++    color: const Color(0xFFF5F5FF),
++  );
++
++  /// Large stat number — SpaceGrotesk 24 700 near-white
++  static TextStyle statNumber = GoogleFonts.spaceGrotesk(
++    fontSize: 24,
++    fontWeight: FontWeight.w700,
++    color: const Color(0xFFF5F5FF),
++  );
++
++  /// CTA button label — SpaceMono 14 700 white
++  static TextStyle buttonText = GoogleFonts.spaceMono(
++    fontSize: 14,
++    fontWeight: FontWeight.w700,
++    color: Colors.white,
++  );
+ }
++
+diff --git a/lib/features/home/presentation/dashboard_screen.dart b/lib/features/home/presentation/dashboard_screen.dart
+index ce62c92..ee28895 100644
+--- a/lib/features/home/presentation/dashboard_screen.dart
++++ b/lib/features/home/presentation/dashboard_screen.dart
+@@ -12,8 +12,10 @@ import '../../../models/user_model.dart';
+ import '../../../shared/providers/auth_provider.dart';
+ import '../../../shared/providers/roadmap_provider.dart';
+ import '../../../shared/providers/dashboard_provider.dart';
++import '../../../shared/providers/social_provider.dart';
+ import '../../../shared/widgets/premium_animations.dart';
+ import '../../../shared/widgets/loading_shimmer.dart';
++import 'package:shared_preferences/shared_preferences.dart';
+ 
+ // ─── Daily XP: backed by SharedPreferences via todayXpProvider ──
+ 
+@@ -28,8 +30,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+   @override
+   void initState() {
+     super.initState();
+-    Future.microtask(
+-        () => ref.read(dashboardProvider.notifier).loadDashboard());
++    Future.microtask(() {
++      ref.read(dashboardProvider.notifier).loadDashboard();
++      ref.read(socialProvider.notifier).fetchSocialData();
++    });
+   }
+ 
+   @override
+@@ -38,13 +42,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+     final dashboardState = ref.watch(dashboardProvider);
+     final roadmaps = ref.watch(activeRoadmapsProvider);
+     final dailyXp = ref.watch(todayXpProvider);
++    final socialState = ref.watch(socialProvider);
+     final now = DateTime.now();
+ 
+     return Scaffold(
+       backgroundColor: AppColors.bgDark,
+       body: RefreshIndicator(
+-        onRefresh: () =>
+-            ref.read(dashboardProvider.notifier).loadDashboard(),
++        onRefresh: () async {
++          await ref.read(dashboardProvider.notifier).loadDashboard();
++          await ref.read(socialProvider.notifier).fetchSocialData(forceRefresh: true);
++        },
+         color: AppColors.brand,
+         backgroundColor: AppColors.bgCard,
+         child: CustomScrollView(
+@@ -255,6 +262,20 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+               ),
+             ),
+ 
++            // ── Friends Activity section ────────────────────────
++            SliverToBoxAdapter(
++              child: Padding(
++                padding: const EdgeInsets.fromLTRB(AppSpacing.pagePadding,
++                    AppSpacing.xl, AppSpacing.pagePadding, 0),
++                child: _FriendsActivitySection(
++                  friends: socialState.friends,
++                  isLoading: socialState.isLoading,
++                )
++                    .animate()
++                    .fadeIn(delay: 360.ms),
++              ),
++            ),
++
+             const SliverToBoxAdapter(child: SizedBox(height: 110)),
+           ],
+         ),
+@@ -1254,6 +1275,141 @@ class _ActivityDotGridState extends State<_ActivityDotGrid>
+   }
+ }
+ 
++// ─── Friends Activity Section ─────────────────────────────────────
++class _FriendsActivitySection extends StatelessWidget {
++  final List<MockFriend> friends;
++  final bool isLoading;
++
++  const _FriendsActivitySection({
++    required this.friends,
++    required this.isLoading,
++  });
++
++  @override
++  Widget build(BuildContext context) {
++    return Column(
++      crossAxisAlignment: CrossAxisAlignment.start,
++      children: [
++        Text(
++          'Friends Activity',
++          style: GoogleFonts.spaceMono(
++            fontSize: 17,
++            fontWeight: FontWeight.bold,
++            color: AppColors.textPrimary,
++            letterSpacing: 0.3,
++          ),
++        ),
++        const SizedBox(height: AppSpacing.md),
++        Container(
++          decoration: BoxDecoration(
++            color: AppColors.bgCard,
++            borderRadius: BorderRadius.circular(20),
++            border: Border.all(color: AppColors.border),
++          ),
++          padding: const EdgeInsets.all(16),
++          child: isLoading && friends.isEmpty
++              ? const Center(
++                  child: Padding(
++                    padding: EdgeInsets.symmetric(vertical: 20),
++                    child: CircularProgressIndicator(color: AppColors.brand),
++                  ),
++                )
++              : friends.isEmpty
++                  ? Center(
++                      child: Padding(
++                        padding: const EdgeInsets.symmetric(vertical: 24),
++                        child: Column(
++                          children: [
++                            const Text('👥', style: TextStyle(fontSize: 32)),
++                            const SizedBox(height: 12),
++                            Text(
++                              'No friends yet. Add friends to see activity!',
++                              style: GoogleFonts.inter(
++                                fontSize: 13,
++                                color: AppColors.textMuted,
++                              ),
++                              textAlign: TextAlign.center,
++                            ),
++                          ],
++                        ),
++                      ),
++                    )
++                  : ListView.separated(
++                      shrinkWrap: true,
++                      physics: const NeverScrollableScrollPhysics(),
++                      itemCount: friends.length.clamp(0, 3), // show top 3 on dashboard
++                      separatorBuilder: (_, __) => const Divider(
++                        color: AppColors.border,
++                        height: 24,
++                      ),
++                      itemBuilder: (_, idx) {
++                        final friend = friends[idx];
++                        return Row(
++                          children: [
++                            CircleAvatar(
++                              radius: 18,
++                              backgroundColor: friend.color.withValues(alpha: 0.15),
++                              child: Text(
++                                friend.name.isNotEmpty ? friend.name[0].toUpperCase() : '?',
++                                style: GoogleFonts.spaceMono(
++                                  fontSize: 14,
++                                  fontWeight: FontWeight.bold,
++                                  color: friend.color,
++                                ),
++                              ),
++                            ),
++                            const SizedBox(width: 12),
++                            Expanded(
++                              child: Column(
++                                crossAxisAlignment: CrossAxisAlignment.start,
++                                children: [
++                                  Text(
++                                    friend.name,
++                                    style: GoogleFonts.inter(
++                                      fontSize: 14,
++                                      fontWeight: FontWeight.bold,
++                                      color: AppColors.textPrimary,
++                                    ),
++                                  ),
++                                  const SizedBox(height: 2),
++                                  Text(
++                                    friend.status,
++                                    style: GoogleFonts.inter(
++                                      fontSize: 12,
++                                      color: AppColors.textSecondary,
++                                    ),
++                                    maxLines: 1,
++                                    overflow: TextOverflow.ellipsis,
++                                  ),
++                                ],
++                              ),
++                            ),
++                            if (friend.streak > 0) ...[
++                              const SizedBox(width: 8),
++                              Row(
++                                children: [
++                                  const Text('🔥 ', style: TextStyle(fontSize: 12)),
++                                  Text(
++                                    '${friend.streak}',
++                                    style: GoogleFonts.spaceGrotesk(
++                                      fontSize: 12,
++                                      fontWeight: FontWeight.bold,
++                                      color: AppColors.coral,
++                                    ),
++                                  ),
++                                ],
++                              ),
++                            ],
++                          ],
++                        );
++                      },
++                    ),
++        ),
++      ],
++    );
++  }
++}
++
+ // ─── FIX 5: Daily Goal Card (animated ring, real data) ───────
+ class _DailyGoalCard extends StatefulWidget {
+   final int dailyXpEarned;
+@@ -1268,14 +1424,15 @@ class _DailyGoalCardState extends State<_DailyGoalCard>
+   late AnimationController _ctrl;
+   late Animation<double> _progressAnim;
+ 
+-  static const int kDailyGoal = 300;
++  int _dailyGoalTarget = 300;
+ 
+   double get _rawProgress =>
+-      (widget.dailyXpEarned / kDailyGoal).clamp(0.0, 1.0);
++      (widget.dailyXpEarned / _dailyGoalTarget).clamp(0.0, 1.0);
+ 
+   @override
+   void initState() {
+     super.initState();
++    _loadDailyGoal();
+     _ctrl = AnimationController(
+       vsync: this,
+       duration: const Duration(milliseconds: 1200),
+@@ -1286,6 +1443,21 @@ class _DailyGoalCardState extends State<_DailyGoalCard>
+     _ctrl.forward();
+   }
+ 
++  Future<void> _loadDailyGoal() async {
++    final prefs = await SharedPreferences.getInstance();
++    final target = prefs.getInt('daily_goal_target') ?? 300;
++    if (mounted) {
++      setState(() {
++        _dailyGoalTarget = target;
++        _progressAnim = Tween<double>(begin: _progressAnim.value, end: _rawProgress).animate(
++          CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic),
++        );
++      });
++      _ctrl.reset();
++      _ctrl.forward();
++    }
++  }
++
+   @override
+   void didUpdateWidget(_DailyGoalCard old) {
+     super.didUpdateWidget(old);
+@@ -1310,8 +1482,8 @@ class _DailyGoalCardState extends State<_DailyGoalCard>
+   @override
+   Widget build(BuildContext context) {
+     final earned = widget.dailyXpEarned;
+-    final remaining = (kDailyGoal - earned).clamp(0, kDailyGoal);
+-    final isGoalReached = earned >= kDailyGoal;
++    final remaining = (_dailyGoalTarget - earned).clamp(0, _dailyGoalTarget);
++    final isGoalReached = earned >= _dailyGoalTarget;
+ 
+     return Container(
+       padding: const EdgeInsets.all(20),
+@@ -1381,7 +1553,7 @@ class _DailyGoalCardState extends State<_DailyGoalCard>
+                 ),
+                 const SizedBox(height: 4),
+                 Text(
+-                  '$earned of $kDailyGoal XP earned today',
++                  '$earned of $_dailyGoalTarget XP earned today',
+                   style: GoogleFonts.inter(
+                     fontSize: 12,
+                     color: AppColors.textSecondary,
+diff --git a/lib/features/map/presentation/map_list_screen.dart b/lib/features/map/presentation/map_list_screen.dart
+index 0066940..7943bb3 100644
+--- a/lib/features/map/presentation/map_list_screen.dart
++++ b/lib/features/map/presentation/map_list_screen.dart
+@@ -1,3 +1,4 @@
++import 'dart:math';
+ import 'package:flutter/material.dart';
+ import 'package:flutter_animate/flutter_animate.dart';
+ import 'package:flutter_riverpod/flutter_riverpod.dart';
+@@ -282,7 +283,7 @@ class _MapListScreenState extends ConsumerState<MapListScreen> {
+       child: Column(
+         mainAxisAlignment: MainAxisAlignment.center,
+         children: [
+-          const Text('🗺️', style: TextStyle(fontSize: 56)),
++          _EmptyStateMapWidget(),
+           const SizedBox(height: 16),
+           Text(
+             'No roadmaps yet',
+@@ -332,8 +333,130 @@ class _MapListScreenState extends ConsumerState<MapListScreen> {
+   }
+ }
+ 
++// ─── Empty State Map Widget ──────────────────────────────────────
++class _EmptyStateMapWidget extends StatelessWidget {
++  @override
++  Widget build(BuildContext context) {
++    return SizedBox(
++      width: 180,
++      height: 140,
++      child: CustomPaint(
++        painter: _WindingRoadmapPainter(),
++      ),
++    );
++  }
++}
++
++class _WindingRoadmapPainter extends CustomPainter {
++  @override
++  void paint(Canvas canvas, Size size) {
++    final pathPaint = Paint()
++      ..color = AppColors.brand.withValues(alpha: 0.2)
++      ..style = PaintingStyle.stroke
++      ..strokeWidth = 6.0
++      ..strokeCap = StrokeCap.round;
++
++    final dashPaint = Paint()
++      ..color = AppColors.brand
++      ..style = PaintingStyle.stroke
++      ..strokeWidth = 2.0
++      ..strokeCap = StrokeCap.round;
++
++    // Draw winding pathway path
++    final path = Path()
++      ..moveTo(20, size.height - 20)
++      ..cubicTo(size.width * 0.2, size.height * 0.8, size.width * 0.1, size.height * 0.3, size.width * 0.5, size.height * 0.4)
++      ..cubicTo(size.width * 0.8, size.height * 0.5, size.width * 0.7, size.height * 0.1, size.width - 20, 20);
++
++    canvas.drawPath(path, pathPaint);
++
++    // Draw nodes on path
++    final nodePaint = Paint()
++      ..color = AppColors.brand
++      ..style = PaintingStyle.fill;
++
++    final activeNodePaint = Paint()
++      ..color = AppColors.green
++      ..style = PaintingStyle.fill;
++
++    canvas.drawCircle(const Offset(35, 110), 8, nodePaint);
++    canvas.drawCircle(const Offset(90, 75), 8, nodePaint);
++    canvas.drawCircle(const Offset(140, 35), 8, activeNodePaint);
++
++    // Draw some stars
++    final starPaint = Paint()
++      ..color = AppColors.gold
++      ..style = PaintingStyle.fill;
++
++    _drawStar(canvas, const Offset(30, 30), 6, starPaint);
++    _drawStar(canvas, const Offset(150, 110), 4, starPaint);
++    _drawStar(canvas, const Offset(100, 20), 5, starPaint);
++  }
++
++  void _drawStar(Canvas canvas, Offset center, double radius, Paint paint) {
++    final path = Path();
++    for (int i = 0; i < 5; i++) {
++      double angle = i * 4 * pi / 5 - pi / 2;
++      double x = center.dx + radius * (i % 2 == 0 ? 1.0 : 0.4) * cos(angle);
++      double y = center.dy + radius * (i % 2 == 0 ? 1.0 : 0.4) * sin(angle);
++      if (i == 0) {
++        path.moveTo(x, y);
++      } else {
++        path.lineTo(x, y);
++      }
++    }
++    path.close();
++    canvas.drawPath(path, paint);
++  }
++
++  @override
++  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
++}
++
++// ─── Style Chip for Map style selector ────────────────────────────
++class _StyleChip extends StatelessWidget {
++  final String label;
++  final bool isSelected;
++  final VoidCallback onTap;
++
++  const _StyleChip({
++    required this.label,
++    required this.isSelected,
++    required this.onTap,
++  });
++
++  @override
++  Widget build(BuildContext context) {
++    return GestureDetector(
++      onTap: onTap,
++      child: AnimatedContainer(
++        duration: const Duration(milliseconds: 200),
++        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
++        decoration: BoxDecoration(
++          color: isSelected
++              ? AppColors.brand.withValues(alpha: 0.15)
++              : Colors.transparent,
++          borderRadius: BorderRadius.circular(20),
++          border: Border.all(
++            color: isSelected ? AppColors.brand : AppColors.border,
++            width: 1,
++          ),
++        ),
++        child: Text(
++          label,
++          style: GoogleFonts.spaceMono(
++            fontSize: 9,
++            fontWeight: FontWeight.bold,
++            color: isSelected ? AppColors.brand : AppColors.textMuted,
++          ),
++        ),
++      ),
++    );
++  }
++}
++
+ // ─── Roadmap List Card ─────────────────────────────────────────
+-class _RoadmapListCard extends StatelessWidget {
++class _RoadmapListCard extends ConsumerWidget {
+   final RoadmapModel roadmap;
+   const _RoadmapListCard({required this.roadmap});
+ 
+@@ -351,7 +474,7 @@ class _RoadmapListCard extends StatelessWidget {
+   }
+ 
+   @override
+-  Widget build(BuildContext context) {
++  Widget build(BuildContext context, WidgetRef ref) {
+     final color = _accentColor;
+     final progress = roadmap.progressPercent;
+ 
+@@ -359,7 +482,7 @@ class _RoadmapListCard extends StatelessWidget {
+       onTap: () => context.push('${AppRoutes.map}/${roadmap.id}'),
+       child: Container(
+         margin: const EdgeInsets.only(bottom: 12),
+-        constraints: const BoxConstraints(minHeight: 90),
++        constraints: const BoxConstraints(minHeight: 110),
+         decoration: BoxDecoration(
+           color: AppColors.bgCard,
+           borderRadius: BorderRadius.circular(16),
+@@ -420,7 +543,34 @@ class _RoadmapListCard extends StatelessWidget {
+                         maxLines: 1,
+                         overflow: TextOverflow.ellipsis,
+                       ),
+-                      const SizedBox(height: 4),
++                      const SizedBox(height: 6),
++                      // Map style choice chips
++                      Row(
++                        children: [
++                          _StyleChip(
++                            label: 'Simple',
++                            isSelected: roadmap.mapStyle == 'simple',
++                            onTap: () {
++                              if (roadmap.mapStyle != 'simple') {
++                                final updated = roadmap.copyWith(mapStyle: 'simple');
++                                ref.read(roadmapProvider.notifier).updateRoadmapLocally(updated);
++                              }
++                            },
++                          ),
++                          const SizedBox(width: 8),
++                          _StyleChip(
++                            label: 'Topics',
++                            isSelected: roadmap.mapStyle == 'sublevels',
++                            onTap: () {
++                              if (roadmap.mapStyle != 'sublevels') {
++                                final updated = roadmap.copyWith(mapStyle: 'sublevels');
++                                ref.read(roadmapProvider.notifier).updateRoadmapLocally(updated);
++                              }
++                            },
++                          ),
++                        ],
++                      ),
++                      const SizedBox(height: 6),
+                       // Progress subtitle
+                       Text(
+                         'Level ${roadmap.currentLevel} of ${roadmap.totalLevels} • ${(progress * 100).toInt()}% complete',
+diff --git a/lib/features/map/presentation/map_view_screen.dart b/lib/features/map/presentation/map_view_screen.dart
+index 820ce28..54ed981 100644
+--- a/lib/features/map/presentation/map_view_screen.dart
++++ b/lib/features/map/presentation/map_view_screen.dart
+@@ -1,4 +1,3 @@
+-import 'dart:math' as math;
+ import 'package:flutter/material.dart';
+ import 'package:flutter_animate/flutter_animate.dart';
+ import 'package:flutter_riverpod/flutter_riverpod.dart';
+@@ -14,6 +13,7 @@ import '../../../shared/providers/roadmap_provider.dart';
+ 
+ // ─── Constants ──────────────────────────────────────────────────
+ const double _kNodeSize = 80.0;
++const double _kSubNodeSize = 48.0;
+ const double _kNodeSpacing = 110.0;
+ const String _kBgPrefKey = 'map_bg_theme';
+ 
+@@ -122,7 +122,6 @@ class _MapViewScreenState extends ConsumerState<MapViewScreen>
+       vsync: this,
+       duration: const Duration(milliseconds: 2000),
+     );
+-    // Delay second ring by 0.5s (500ms / 2000ms = 0.25 normalized)
+     Future.delayed(const Duration(milliseconds: 500), () {
+       if (mounted) _pulse2Ctrl.repeat();
+     });
+@@ -254,6 +253,7 @@ class _MapViewScreenState extends ConsumerState<MapViewScreen>
+                       pulseCtrl: _pulseCtrl,
+                       pulse2Ctrl: _pulse2Ctrl,
+                       roadmapId: widget.roadmapId,
++                      hasSubLevels: roadmap?.hasSubLevels ?? false,
+                     ),
+                   ),
+                 ),
+@@ -447,10 +447,34 @@ class _MapTopBarDelegate extends SliverPersistentHeaderDelegate {
+                       maxLines: 1,
+                       overflow: TextOverflow.ellipsis,
+                     ),
+-                    Text(
+-                      'Level ${roadmap?.currentLevel ?? 0} of ${roadmap?.totalLevels ?? 0}',
+-                      style: GoogleFonts.inter(
+-                          fontSize: 12, color: AppColors.textSecondary),
++                    Row(
++                      children: [
++                        Text(
++                          'Level ${roadmap?.currentLevel ?? 0} of ${roadmap?.totalLevels ?? 0}',
++                          style: GoogleFonts.inter(
++                              fontSize: 12, color: AppColors.textSecondary),
++                        ),
++                        if (roadmap?.hasSubLevels == true) ...[
++                          const SizedBox(width: 6),
++                          Container(
++                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
++                            decoration: BoxDecoration(
++                              color: AppColors.brand.withValues(alpha: 0.15),
++                              borderRadius: BorderRadius.circular(8),
++                              border: Border.all(color: AppColors.brand.withValues(alpha: 0.4)),
++                            ),
++                            child: Text(
++                              'TOPICS',
++                              style: GoogleFonts.spaceMono(
++                                fontSize: 8,
++                                fontWeight: FontWeight.bold,
++                                color: AppColors.brand,
++                                letterSpacing: 0.8,
++                              ),
++                            ),
++                          ),
++                        ],
++                      ],
+                     ),
+                   ],
+                 ),
+@@ -506,26 +530,23 @@ class _MapBody extends StatelessWidget {
+   final AnimationController pulseCtrl;
+   final AnimationController pulse2Ctrl;
+   final String roadmapId;
++  final bool hasSubLevels;
+ 
+   const _MapBody({
+     required this.levels,
+     required this.pulseCtrl,
+     required this.pulse2Ctrl,
+     required this.roadmapId,
++    required this.hasSubLevels,
+   });
+ 
+   double _xOffsetForIndex(int idx) {
+     switch (idx % 4) {
+-      case 0:
+-        return 0.0;
+-      case 1:
+-        return 80.0;
+-      case 2:
+-        return 0.0;
+-      case 3:
+-        return -80.0;
+-      default:
+-        return 0.0;
++      case 0: return 0.0;
++      case 1: return 80.0;
++      case 2: return 0.0;
++      case 3: return -80.0;
++      default: return 0.0;
+     }
+   }
+ 
+@@ -545,12 +566,12 @@ class _MapBody extends StatelessWidget {
+               world: (reversed[i].levelNumber - 1) ~/ 5 + 1,
+             ).animate().fadeIn(duration: 300.ms),
+ 
+-          // Connector
++          // Connector between nodes
+           if (i > 0)
+             _ConnectorWidget(
+               isCompleted:
+-                  reversed[i].status == LevelStatus.completed ||
+-                      reversed[i - 1].status == LevelStatus.completed,
++                  reversed[i].isCompletedActual ||
++                      reversed[i - 1].isCompletedActual,
+               fromX: center +
+                   _xOffsetForIndex(reversed[i].levelNumber - 1) +
+                   _kNodeSize / 2,
+@@ -559,7 +580,7 @@ class _MapBody extends StatelessWidget {
+                   _kNodeSize / 2,
+             ),
+ 
+-          // Level node
++          // Level node (with optional sub-level cluster below)
+           SizedBox(
+             width: double.infinity,
+             child: Stack(
+@@ -568,20 +589,36 @@ class _MapBody extends StatelessWidget {
+                 Transform.translate(
+                   offset:
+                       Offset(_xOffsetForIndex(reversed[i].levelNumber - 1), 0),
+-                  child: _LevelNode(
+-                    level: reversed[i],
+-                    pulseCtrl: pulseCtrl,
+-                    pulse2Ctrl: pulse2Ctrl,
+-                    roadmapId: roadmapId,
+-                  )
+-                      .animate()
+-                      .fadeIn(
+-                          delay: Duration(milliseconds: i * 55),
+-                          duration: 300.ms)
+-                      .scale(
+-                          begin: const Offset(0.6, 0.6),
+-                          delay: Duration(milliseconds: i * 55),
+-                          curve: Curves.elasticOut),
++                  child: Column(
++                    children: [
++                      _LevelNode(
++                        level: reversed[i],
++                        pulseCtrl: pulseCtrl,
++                        pulse2Ctrl: pulse2Ctrl,
++                        roadmapId: roadmapId,
++                        hasSubLevels: hasSubLevels,
++                      )
++                          .animate()
++                          .fadeIn(
++                              delay: Duration(milliseconds: i * 55),
++                              duration: 300.ms)
++                          .scale(
++                              begin: const Offset(0.6, 0.6),
++                              delay: Duration(milliseconds: i * 55),
++                              curve: Curves.elasticOut),
++
++                      // ── Sub-level cluster ───────────────────
++                      if (hasSubLevels && reversed[i].subLevels.isNotEmpty)
++                        _SubLevelCluster(
++                          level: reversed[i],
++                          animDelay: i * 55,
++                        )
++                            .animate()
++                            .fadeIn(
++                                delay: Duration(milliseconds: i * 55 + 120),
++                                duration: 300.ms),
++                    ],
++                  ),
+                 ),
+               ],
+             ),
+@@ -593,6 +630,409 @@ class _MapBody extends StatelessWidget {
+   }
+ }
+ 
++// ─── Sub-Level Cluster ──────────────────────────────────────────
++class _SubLevelCluster extends StatelessWidget {
++  final LevelModel level;
++  final int animDelay;
++
++  const _SubLevelCluster({required this.level, required this.animDelay});
++
++  @override
++  Widget build(BuildContext context) {
++    final subs = level.subLevels;
++    final completedCount = level.completedSubLevelCount;
++
++    return Column(
++      children: [
++        // Connector from main node to sub cluster
++        Container(
++          width: 2,
++          height: 16,
++          color: AppColors.brand.withValues(alpha: 0.3),
++        ),
++        // Sub-level nodes row
++        Container(
++          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
++          margin: const EdgeInsets.symmetric(horizontal: 40),
++          decoration: BoxDecoration(
++            color: AppColors.bgCard.withValues(alpha: 0.6),
++            borderRadius: BorderRadius.circular(20),
++            border: Border.all(
++              color: AppColors.brand.withValues(alpha: 0.2),
++            ),
++          ),
++          child: Column(
++            children: [
++              // Progress label
++              Row(
++                mainAxisAlignment: MainAxisAlignment.center,
++                children: [
++                  Icon(
++                    Icons.account_tree_outlined,
++                    size: 12,
++                    color: AppColors.brand.withValues(alpha: 0.7),
++                  ),
++                  const SizedBox(width: 5),
++                  Text(
++                    '$completedCount/${subs.length} sub-topics done',
++                    style: GoogleFonts.spaceMono(
++                      fontSize: 10,
++                      fontWeight: FontWeight.bold,
++                      color: completedCount == subs.length
++                          ? AppColors.green
++                          : AppColors.brand.withValues(alpha: 0.8),
++                      letterSpacing: 0.5,
++                    ),
++                  ),
++                ],
++              ),
++              const SizedBox(height: 10),
++              // Sub-level circles
++              Wrap(
++                spacing: 12,
++                runSpacing: 10,
++                alignment: WrapAlignment.center,
++                children: subs.asMap().entries.map((e) {
++                  final si = e.key;
++                  final sub = e.value;
++                  return _SubLevelNode(
++                    sub: sub,
++                    label: '${level.levelNumber}.${si + 1}',
++                    parentLevel: level,
++                  );
++                }).toList(),
++              ),
++            ],
++          ),
++        ),
++      ],
++    );
++  }
++}
++
++// ─── Sub-Level Node ─────────────────────────────────────────────
++class _SubLevelNode extends StatelessWidget {
++  final SubLevel sub;
++  final String label;
++  final LevelModel parentLevel;
++
++  const _SubLevelNode({
++    required this.sub,
++    required this.label,
++    required this.parentLevel,
++  });
++
++  @override
++  Widget build(BuildContext context) {
++    final isCompleted = sub.isCompleted;
++    final isActive = !isCompleted && !parentLevel.isLocked;
++
++    Color circleColor;
++    Color borderColor;
++    Widget centerWidget;
++
++    if (isCompleted) {
++      circleColor = AppColors.green.withValues(alpha: 0.2);
++      borderColor = AppColors.green;
++      centerWidget = const Icon(Icons.check_rounded, size: 16, color: AppColors.green);
++    } else if (isActive) {
++      circleColor = AppColors.brand.withValues(alpha: 0.2);
++      borderColor = AppColors.brand;
++      centerWidget = Text(
++        label,
++        style: GoogleFonts.spaceMono(
++          fontSize: 9,
++          fontWeight: FontWeight.bold,
++          color: AppColors.brand,
++        ),
++      );
++    } else {
++      circleColor = AppColors.bgCard;
++      borderColor = AppColors.border;
++      centerWidget = const Icon(Icons.lock_outline, size: 13, color: AppColors.textMuted);
++    }
++
++    return GestureDetector(
++      onTap: () => _onTap(context, isActive, isCompleted),
++      child: Column(
++        mainAxisSize: MainAxisSize.min,
++        children: [
++          AnimatedContainer(
++            duration: const Duration(milliseconds: 200),
++            width: _kSubNodeSize,
++            height: _kSubNodeSize,
++            decoration: BoxDecoration(
++              color: circleColor,
++              shape: BoxShape.circle,
++              border: Border.all(color: borderColor, width: isActive ? 2 : 1.5),
++              boxShadow: isCompleted
++                  ? [BoxShadow(color: AppColors.green.withValues(alpha: 0.25), blurRadius: 10)]
++                  : isActive
++                      ? [BoxShadow(color: AppColors.brand.withValues(alpha: 0.3), blurRadius: 12)]
++                      : null,
++            ),
++            child: Center(child: centerWidget),
++          ),
++          const SizedBox(height: 4),
++          SizedBox(
++            width: 60,
++            child: Text(
++              sub.title,
++              style: GoogleFonts.inter(
++                fontSize: 9,
++                color: isActive || isCompleted
++                    ? AppColors.textPrimary
++                    : AppColors.textMuted,
++                fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
++              ),
++              textAlign: TextAlign.center,
++              maxLines: 2,
++              overflow: TextOverflow.ellipsis,
++            ),
++          ),
++        ],
++      ),
++    );
++  }
++
++  void _onTap(BuildContext context, bool isActive, bool isCompleted) {
++    if (!isActive && !isCompleted) {
++      ScaffoldMessenger.of(context).showSnackBar(
++        SnackBar(
++          backgroundColor: AppColors.bgCard,
++          behavior: SnackBarBehavior.floating,
++          shape: RoundedRectangleBorder(
++              borderRadius: BorderRadius.circular(12),
++              side: const BorderSide(color: AppColors.border)),
++          content: Row(children: [
++            const Icon(Icons.lock_outline, color: AppColors.textMuted, size: 16),
++            const SizedBox(width: 8),
++            Text('Complete parent level first',
++                style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary)),
++          ]),
++          duration: const Duration(seconds: 2),
++        ),
++      );
++      return;
++    }
++    showModalBottomSheet(
++      context: context,
++      isScrollControlled: true,
++      backgroundColor: Colors.transparent,
++      builder: (_) => _SubLevelBottomSheet(
++        sub: sub,
++        parentLevel: parentLevel,
++        label: label,
++        isCompleted: isCompleted,
++      ),
++    );
++  }
++}
++
++// ─── Sub-Level Bottom Sheet ─────────────────────────────────────
++class _SubLevelBottomSheet extends StatelessWidget {
++  final SubLevel sub;
++  final LevelModel parentLevel;
++  final String label;
++  final bool isCompleted;
++
++  const _SubLevelBottomSheet({
++    required this.sub,
++    required this.parentLevel,
++    required this.label,
++    required this.isCompleted,
++  });
++
++  @override
++  Widget build(BuildContext context) {
++    return DraggableScrollableSheet(
++      initialChildSize: 0.50,
++      maxChildSize: 0.78,
++      minChildSize: 0.35,
++      builder: (_, controller) => Container(
++        decoration: const BoxDecoration(
++          color: AppColors.bgCard,
++          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
++          border: Border(top: BorderSide(color: AppColors.border, width: 1)),
++        ),
++        child: Column(
++          children: [
++            const SizedBox(height: 12),
++            Center(
++              child: Container(
++                width: 40, height: 4,
++                decoration: BoxDecoration(
++                  color: AppColors.borderLight,
++                  borderRadius: BorderRadius.circular(2),
++                ),
++              ),
++            ),
++            Expanded(
++              child: ListView(
++                controller: controller,
++                padding: const EdgeInsets.fromLTRB(24, 16, 24, 28),
++                children: [
++                  // Sub-level badge
++                  Center(
++                    child: Container(
++                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
++                      decoration: BoxDecoration(
++                        color: AppColors.brand.withValues(alpha: 0.15),
++                        borderRadius: BorderRadius.circular(20),
++                        border: Border.all(color: AppColors.brand.withValues(alpha: 0.4)),
++                      ),
++                      child: Text(
++                        'SUB-TOPIC $label',
++                        style: GoogleFonts.spaceMono(
++                          fontSize: 11,
++                          fontWeight: FontWeight.bold,
++                          color: AppColors.brand,
++                          letterSpacing: 1.5,
++                        ),
++                      ),
++                    ),
++                  ),
++                  const SizedBox(height: 16),
++                  Center(
++                    child: ShaderMask(
++                      shaderCallback: (b) => AppColors.brandGradient
++                          .createShader(Rect.fromLTWH(0, 0, b.width, b.height)),
++                      child: Text(
++                        sub.title,
++                        style: GoogleFonts.spaceMono(
++                          fontSize: 24,
++                          fontWeight: FontWeight.bold,
++                          color: Colors.white,
++                        ),
++                        textAlign: TextAlign.center,
++                      ),
++                    ),
++                  ),
++                  const SizedBox(height: 8),
++                  Center(
++                    child: Text(
++                      'Part of: ${parentLevel.title}',
++                      style: GoogleFonts.inter(
++                        fontSize: 13,
++                        color: AppColors.textSecondary,
++                      ),
++                    ),
++                  ),
++                  if (sub.description.isNotEmpty) ...[
++                    const SizedBox(height: 12),
++                    Text(
++                      sub.description,
++                      style: GoogleFonts.inter(
++                        fontSize: 14,
++                        color: AppColors.textSecondary,
++                        height: 1.5,
++                      ),
++                      textAlign: TextAlign.center,
++                    ),
++                  ],
++                  const SizedBox(height: 20),
++                  const Divider(color: AppColors.border),
++                  const SizedBox(height: 16),
++                  // Info chips
++                  Wrap(
++                    alignment: WrapAlignment.center,
++                    spacing: 8,
++                    runSpacing: 8,
++                    children: [
++                      _InfoChip(
++                        icon: Icons.quiz_outlined,
++                        label: sub.proofType,
++                        color: AppColors.brand,
++                      ),
++                      _InfoChip(
++                        icon: Icons.bolt,
++                        label: '${parentLevel.xpReward ~/ (parentLevel.subLevels.isEmpty ? 1 : parentLevel.subLevels.length)} XP',
++                        color: AppColors.gold,
++                      ),
++                    ],
++                  ),
++                  if (isCompleted) ...[
++                    const SizedBox(height: 16),
++                    Container(
++                      padding: const EdgeInsets.all(12),
++                      decoration: BoxDecoration(
++                        color: AppColors.green.withValues(alpha: 0.1),
++                        borderRadius: BorderRadius.circular(12),
++                        border: Border.all(color: AppColors.green.withValues(alpha: 0.3)),
++                      ),
++                      child: Row(
++                        mainAxisAlignment: MainAxisAlignment.center,
++                        children: [
++                          const Icon(Icons.check_circle, color: AppColors.green, size: 16),
++                          const SizedBox(width: 8),
++                          Text(
++                            'Sub-topic completed!',
++                            style: GoogleFonts.inter(
++                              fontSize: 13,
++                              color: AppColors.green,
++                              fontWeight: FontWeight.w600,
++                            ),
++                          ),
++                        ],
++                      ),
++                    ),
++                    const SizedBox(height: 16),
++                    OutlinedButton(
++                      onPressed: () => Navigator.pop(context),
++                      style: OutlinedButton.styleFrom(
++                        foregroundColor: AppColors.brand,
++                        side: const BorderSide(color: AppColors.brand),
++                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
++                        minimumSize: const Size(double.infinity, 52),
++                      ),
++                      child: Text('Close', style: GoogleFonts.spaceMono(fontWeight: FontWeight.bold)),
++                    ),
++                  ] else ...[
++                    const SizedBox(height: 24),
++                    GestureDetector(
++                      onTap: () {
++                        Navigator.pop(context);
++                        context.push(
++                          '${AppRoutes.verification}/${sub.compositeId}/${sub.proofType}',
++                        );
++                      },
++                      child: Container(
++                        width: double.infinity,
++                        height: 56,
++                        decoration: BoxDecoration(
++                          gradient: AppColors.brandGradient,
++                          borderRadius: BorderRadius.circular(16),
++                          boxShadow: [
++                            BoxShadow(
++                              color: AppColors.brand.withValues(alpha: 0.4),
++                              blurRadius: 20,
++                              offset: const Offset(0, 8),
++                            )
++                          ],
++                        ),
++                        child: Center(
++                          child: Text(
++                            'Start Sub-topic',
++                            style: GoogleFonts.spaceMono(
++                              fontSize: 18,
++                              fontWeight: FontWeight.bold,
++                              color: Colors.white,
++                            ),
++                          ),
++                        ),
++                      ),
++                    ),
++                  ],
++                ],
++              ),
++            ),
++          ],
++        ),
++      ),
++    );
++  }
++}
++
+ // ─── World Header Banner ────────────────────────────────────────
+ class _WorldHeader extends StatelessWidget {
+   final int world;
+@@ -610,14 +1050,23 @@ class _WorldHeader extends StatelessWidget {
+             color: AppColors.brand.withValues(alpha: 0.30), width: 1),
+       ),
+       child: Center(
+-        child: Text(
+-          '⭐  WORLD $world  ⭐',
+-          style: GoogleFonts.spaceMono(
+-            fontSize: 13,
+-            fontWeight: FontWeight.bold,
+-            color: AppColors.brand,
+-            letterSpacing: 3,
+-          ),
++        child: Row(
++          mainAxisAlignment: MainAxisAlignment.center,
++          children: [
++            const Icon(Icons.star_rounded, color: AppColors.brand, size: 16),
++            const SizedBox(width: 8),
++            Text(
++              'WORLD $world',
++              style: GoogleFonts.spaceMono(
++                fontSize: 13,
++                fontWeight: FontWeight.bold,
++                color: AppColors.brand,
++                letterSpacing: 3,
++              ),
++            ),
++            const SizedBox(width: 8),
++            const Icon(Icons.star_rounded, color: AppColors.brand, size: 16),
++          ],
+         ),
+       ),
+     );
+@@ -708,12 +1157,14 @@ class _LevelNode extends ConsumerWidget {
+   final AnimationController pulseCtrl;
+   final AnimationController pulse2Ctrl;
+   final String roadmapId;
++  final bool hasSubLevels;
+ 
+   const _LevelNode({
+     required this.level,
+     required this.pulseCtrl,
+     required this.pulse2Ctrl,
+     required this.roadmapId,
++    required this.hasSubLevels,
+   });
+ 
+   @override
+@@ -723,7 +1174,6 @@ class _LevelNode extends ConsumerWidget {
+       child: Column(
+         children: [
+           SizedBox(
+-            // Enough space for glow + pulse rings (100px outer ring + label)
+             width: _kNodeSize + 44,
+             height: _kNodeSize + 44,
+             child: Stack(
+@@ -731,7 +1181,6 @@ class _LevelNode extends ConsumerWidget {
+               children: [
+                 // ── Active: two animated pulse rings ──────────
+                 if (level.status == LevelStatus.active) ...[
+-                  // Ring 1
+                   AnimatedBuilder(
+                     animation: pulseCtrl,
+                     builder: (_, __) {
+@@ -752,7 +1201,6 @@ class _LevelNode extends ConsumerWidget {
+                       );
+                     },
+                   ),
+-                  // Ring 2 (delayed)
+                   AnimatedBuilder(
+                     animation: pulse2Ctrl,
+                     builder: (_, __) {
+@@ -775,13 +1223,33 @@ class _LevelNode extends ConsumerWidget {
+                   ),
+                 ],
+ 
++                // ── Glow ring when all sub-topics done ────────
++                if (hasSubLevels && level.isCompletedActual)
++                  Container(
++                    width: _kNodeSize + 16,
++                    height: _kNodeSize + 16,
++                    decoration: BoxDecoration(
++                      shape: BoxShape.circle,
++                      boxShadow: [
++                        BoxShadow(
++                          color: AppColors.green.withValues(alpha: 0.35),
++                          blurRadius: 24,
++                          spreadRadius: 6,
++                        ),
++                      ],
++                    ),
++                  ),
++
+                 // ── Main node circle ───────────────────────────
+-                _NodeCircle(status: level.status),
++                _NodeCircle(
++                  status: level.status,
++                  subProgress: hasSubLevels ? level.subLevelProgress : null,
++                ),
+               ],
+             ),
+           ),
+           // Label
+-          _NodeLabel(level: level),
++          _NodeLabel(level: level, hasSubLevels: hasSubLevels),
+         ],
+       ),
+     );
+@@ -814,7 +1282,7 @@ class _LevelNode extends ConsumerWidget {
+       isScrollControlled: true,
+       backgroundColor: Colors.transparent,
+       builder: (_) => _LevelBottomSheet(
+-          level: level, isCompleted: level.status == LevelStatus.completed),
++          level: level, isCompleted: level.isCompletedActual),
+     );
+   }
+ }
+@@ -822,7 +1290,9 @@ class _LevelNode extends ConsumerWidget {
+ // ─── Node Circle ────────────────────────────────────────────────
+ class _NodeCircle extends StatelessWidget {
+   final LevelStatus status;
+-  const _NodeCircle({required this.status});
++  final double? subProgress; // 0.0–1.0, null = no sub-levels
++
++  const _NodeCircle({required this.status, this.subProgress});
+ 
+   @override
+   Widget build(BuildContext context) {
+@@ -847,21 +1317,49 @@ class _NodeCircle extends StatelessWidget {
+         );
+ 
+       case LevelStatus.active:
+-        return Container(
+-          width: _kNodeSize,
+-          height: _kNodeSize,
+-          decoration: BoxDecoration(
+-            gradient: AppColors.brandGradient,
+-            shape: BoxShape.circle,
+-            boxShadow: [
+-              BoxShadow(
+-                  color: AppColors.brand.withValues(alpha: 0.6),
+-                  blurRadius: 30,
+-                  spreadRadius: 6)
+-            ],
+-          ),
+-          child: const Icon(Icons.play_arrow_rounded,
+-              color: Colors.white, size: 32),
++        return Stack(
++          alignment: Alignment.center,
++          children: [
++            Container(
++              width: _kNodeSize,
++              height: _kNodeSize,
++              decoration: BoxDecoration(
++                gradient: AppColors.brandGradient,
++                shape: BoxShape.circle,
++                boxShadow: [
++                  BoxShadow(
++                      color: AppColors.brand.withValues(alpha: 0.6),
++                      blurRadius: 30,
++                      spreadRadius: 6)
++                ],
++              ),
++              child: subProgress != null && subProgress! > 0
++                  ? Center(
++                      child: Text(
++                        '${(subProgress! * 100).round()}%',
++                        style: GoogleFonts.spaceGrotesk(
++                          fontSize: 16,
++                          fontWeight: FontWeight.bold,
++                          color: Colors.white,
++                        ),
++                      ),
++                    )
++                  : const Icon(Icons.play_arrow_rounded,
++                      color: Colors.white, size: 32),
++            ),
++            // Circular progress arc for sub-levels
++            if (subProgress != null && subProgress! > 0)
++              SizedBox(
++                width: _kNodeSize,
++                height: _kNodeSize,
++                child: CircularProgressIndicator(
++                  value: subProgress,
++                  strokeWidth: 3,
++                  backgroundColor: Colors.white.withValues(alpha: 0.2),
++                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
++                ),
++              ),
++          ],
+         );
+ 
+       case LevelStatus.locked:
+@@ -871,11 +1369,7 @@ class _NodeCircle extends StatelessWidget {
+           decoration: BoxDecoration(
+             color: const Color(0xFF161625),
+             shape: BoxShape.circle,
+-            border: Border.all(
+-              color: AppColors.border,
+-              width: 1.0,
+-              // Simulated dashed via strokeAlign – proper dashed handled via CustomPaint below
+-            ),
++            border: Border.all(color: AppColors.border, width: 1.0),
+           ),
+           child: const Icon(Icons.lock_outline,
+               color: AppColors.textMuted, size: 24),
+@@ -887,12 +1381,12 @@ class _NodeCircle extends StatelessWidget {
+ // ─── Node Label ─────────────────────────────────────────────────
+ class _NodeLabel extends StatelessWidget {
+   final LevelModel level;
+-  const _NodeLabel({required this.level});
++  final bool hasSubLevels;
++  const _NodeLabel({required this.level, required this.hasSubLevels});
+ 
+   @override
+   Widget build(BuildContext context) {
+-    final numStr =
+-        level.levelNumber.toString().padLeft(2, '0'); // "01", "12" etc.
++    final numStr = level.levelNumber.toString().padLeft(2, '0');
+ 
+     return SizedBox(
+       width: 120,
+@@ -915,7 +1409,7 @@ class _NodeLabel extends StatelessWidget {
+             maxLines: 2,
+             overflow: TextOverflow.ellipsis,
+           ),
+-          if (level.status == LevelStatus.active)
++          if (level.status == LevelStatus.active && !hasSubLevels)
+             Text(
+               'TAP TO PLAY',
+               style: GoogleFonts.spaceMono(
+@@ -927,6 +1421,17 @@ class _NodeLabel extends StatelessWidget {
+             )
+                 .animate(onPlay: (c) => c.repeat(reverse: true))
+                 .moveY(begin: 0, end: -3, duration: 600.ms),
++          if (hasSubLevels && level.subLevels.isNotEmpty)
++            Text(
++              '${level.completedSubLevelCount}/${level.subLevels.length} done',
++              style: GoogleFonts.spaceMono(
++                fontSize: 9,
++                color: level.isCompletedActual
++                    ? AppColors.green
++                    : AppColors.brand.withValues(alpha: 0.8),
++                fontWeight: FontWeight.bold,
++              ),
++            ),
+         ],
+       ),
+     );
+@@ -992,7 +1497,6 @@ class _LevelBottomSheet extends StatelessWidget {
+                     ),
+                   ),
+                   const SizedBox(height: 18),
+-                  // Level number – gradient
+                   Center(
+                     child: ShaderMask(
+                       shaderCallback: (b) => AppColors.brandGradient
+@@ -1059,6 +1563,12 @@ class _LevelBottomSheet extends StatelessWidget {
+                         label: '${level.xpReward} XP',
+                         color: AppColors.gold,
+                       ),
++                      if (level.subLevels.isNotEmpty)
++                        _InfoChip(
++                          icon: Icons.account_tree_outlined,
++                          label: '${level.subLevels.length} sub-topics',
++                          color: const Color(0xFFFF9F43),
++                        ),
+                     ],
+                   ),
+ 
+@@ -1103,6 +1613,47 @@ class _LevelBottomSheet extends StatelessWidget {
+                           style: GoogleFonts.spaceMono(
+                               fontWeight: FontWeight.bold)),
+                     ),
++                  ] else if (level.subLevels.isNotEmpty) ...[
++                    const SizedBox(height: 16),
++                    Container(
++                      padding: const EdgeInsets.all(14),
++                      decoration: BoxDecoration(
++                        color: AppColors.brand.withValues(alpha: 0.08),
++                        borderRadius: BorderRadius.circular(14),
++                        border: Border.all(color: AppColors.brand.withValues(alpha: 0.25)),
++                      ),
++                      child: Row(
++                        children: [
++                          const Icon(Icons.account_tree_outlined,
++                              color: AppColors.brand, size: 18),
++                          const SizedBox(width: 10),
++                          Expanded(
++                            child: Text(
++                              'This level has ${level.subLevels.length} sub-topics. Tap each sub-topic node on the map to complete them.',
++                              style: GoogleFonts.inter(
++                                fontSize: 13,
++                                color: AppColors.textSecondary,
++                                height: 1.4,
++                              ),
++                            ),
++                          ),
++                        ],
++                      ),
++                    ),
++                    const SizedBox(height: 16),
++                    OutlinedButton(
++                      onPressed: () => Navigator.pop(context),
++                      style: OutlinedButton.styleFrom(
++                        foregroundColor: AppColors.brand,
++                        side: const BorderSide(color: AppColors.brand),
++                        shape: RoundedRectangleBorder(
++                            borderRadius: BorderRadius.circular(14)),
++                        minimumSize: const Size(double.infinity, 52),
++                      ),
++                      child: Text('View Sub-topics on Map',
++                          style: GoogleFonts.spaceMono(
++                              fontWeight: FontWeight.bold)),
++                    ),
+                   ] else ...[
+                     const SizedBox(height: 24),
+                     GestureDetector(
+diff --git a/lib/features/profile/presentation/profile_screen.dart b/lib/features/profile/presentation/profile_screen.dart
+index b5affea..08a0418 100644
+--- a/lib/features/profile/presentation/profile_screen.dart
++++ b/lib/features/profile/presentation/profile_screen.dart
+@@ -97,7 +97,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
+ 
+     // Sort by time descending
+     activities.sort((a, b) => b.time.compareTo(a.time));
+-    final recentActivities = activities.take(6).toList();
++    final recentActivities = activities.take(5).toList();
+ 
+     return Scaffold(
+       backgroundColor: AppColors.bgDark,
+diff --git a/lib/features/profile/presentation/settings_screen.dart b/lib/features/profile/presentation/settings_screen.dart
+index c78d6f8..840e347 100644
+--- a/lib/features/profile/presentation/settings_screen.dart
++++ b/lib/features/profile/presentation/settings_screen.dart
+@@ -19,6 +19,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+   bool _friendActivity = false;
+   bool _weeklySummary = true;
+ 
++  // Theme configuration
++  int _currentThemeIndex = 0;
++
+   // AI Configuration
+   final _openAiKeyCtrl = TextEditingController();
+   bool _showApiKey = false;
+@@ -28,6 +31,151 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+   void initState() {
+     super.initState();
+     _loadApiKey();
++    _loadThemePref();
++  }
++
++  Future<void> _loadThemePref() async {
++    final prefs = await SharedPreferences.getInstance();
++    if (mounted) {
++      setState(() {
++        _currentThemeIndex = prefs.getInt('map_bg_theme') ?? 0;
++      });
++    }
++  }
++
++  Future<void> _saveThemePref(int index) async {
++    final prefs = await SharedPreferences.getInstance();
++    await prefs.setInt('map_bg_theme', index);
++    if (mounted) {
++      setState(() => _currentThemeIndex = index);
++    }
++  }
++
++  String _themeName(int index) {
++    switch (index) {
++      case 0:
++        return 'Dark Purple';
++      case 1:
++        return 'Deep Ocean';
++      case 2:
++        return 'Dark Forest';
++      case 3:
++        return 'Midnight';
++      default:
++        return 'Dark Purple';
++    }
++  }
++
++  void _showThemeSheet() {
++    showModalBottomSheet(
++      context: context,
++      backgroundColor: AppColors.bgCard,
++      shape: const RoundedRectangleBorder(
++        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
++      ),
++      builder: (_) => StatefulBuilder(
++        builder: (ctx, setModalState) => Padding(
++          padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
++          child: Column(
++            mainAxisSize: MainAxisSize.min,
++            crossAxisAlignment: CrossAxisAlignment.start,
++            children: [
++              Center(
++                child: Container(
++                  width: 36,
++                  height: 4,
++                  decoration: BoxDecoration(
++                    color: AppColors.borderLight,
++                    borderRadius: BorderRadius.circular(2),
++                  ),
++                ),
++              ),
++              const SizedBox(height: 20),
++              Text(
++                'Map Background Theme',
++                style: GoogleFonts.spaceMono(
++                  fontSize: 18,
++                  fontWeight: FontWeight.bold,
++                  color: AppColors.textPrimary,
++                ),
++              ),
++              const SizedBox(height: 8),
++              Text(
++                'Choose a theme for your level map',
++                style: GoogleFonts.inter(
++                    fontSize: 13, color: AppColors.textSecondary),
++              ),
++              const SizedBox(height: 24),
++              Row(
++                mainAxisAlignment: MainAxisAlignment.spaceAround,
++                children: [
++                  (0, 'Dark Purple', const Color(0xFF1A0A3E)),
++                  (1, 'Deep Ocean', const Color(0xFF071A2E)),
++                  (2, 'Dark Forest', const Color(0xFF071A0E)),
++                  (3, 'Midnight', const Color(0xFF000000)),
++                ].map((item) {
++                  final idx = item.$1;
++                  final name = item.$2;
++                  final swatchColor = item.$3;
++                  final isSelected = _currentThemeIndex == idx;
++                  return GestureDetector(
++                    onTap: () {
++                      setModalState(() {});
++                      _saveThemePref(idx);
++                      Navigator.pop(context);
++                    },
++                    child: Column(
++                      children: [
++                        AnimatedContainer(
++                          duration: const Duration(milliseconds: 200),
++                          width: 60,
++                          height: 60,
++                          decoration: BoxDecoration(
++                            color: swatchColor,
++                            shape: BoxShape.circle,
++                            border: Border.all(
++                              color: isSelected
++                                  ? AppColors.brand
++                                  : AppColors.border,
++                              width: isSelected ? 3 : 1.5,
++                            ),
++                            boxShadow: isSelected
++                                ? [
++                                    BoxShadow(
++                                      color: AppColors.brand.withValues(alpha: 0.4),
++                                      blurRadius: 12,
++                                    )
++                                  ]
++                                : null,
++                          ),
++                          child: isSelected
++                              ? const Icon(Icons.check,
++                                  color: Colors.white, size: 24)
++                              : null,
++                        ),
++                        const SizedBox(height: 8),
++                        Text(
++                          name,
++                          style: GoogleFonts.inter(
++                            fontSize: 11,
++                            color: isSelected
++                                ? AppColors.brand
++                                : AppColors.textSecondary,
++                            fontWeight: isSelected
++                                ? FontWeight.bold
++                                : FontWeight.normal,
++                          ),
++                        ),
++                      ],
++                    ),
++                  );
++                }).toList(),
++              ),
++            ],
++          ),
++        ),
++      ),
++    );
+   }
+ 
+   Future<void> _loadApiKey() async {
+@@ -159,6 +307,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+                 ],
+               ),
+ 
++              // ── Appearance ──────────────────────────────
++              _Section(
++                title: 'Appearance',
++                children: [
++                  _TileItem(
++                    icon: Icons.palette_outlined,
++                    label: 'Map Theme',
++                    subtitle: _themeName(_currentThemeIndex),
++                    onTap: _showThemeSheet,
++                  ),
++                ],
++              ),
++
+               // ── App ──────────────────────────────────────
+               _Section(
+                 title: 'App',
+diff --git a/lib/features/roadmap/presentation/create_roadmap_screen.dart b/lib/features/roadmap/presentation/create_roadmap_screen.dart
+index f586691..8ac97eb 100644
+--- a/lib/features/roadmap/presentation/create_roadmap_screen.dart
++++ b/lib/features/roadmap/presentation/create_roadmap_screen.dart
+@@ -15,40 +15,139 @@ import '../../../shared/providers/roadmap_provider.dart';
+ import '../../../shared/widgets/stepup_button.dart';
+ import '../../../shared/widgets/stepup_input.dart';
+ 
+-class CreateRoadmapScreen extends ConsumerStatefulWidget {
+-  const CreateRoadmapScreen({super.key});
++// ─── Proof type cycle order ──────────────────────────────────────
++const _kProofCycleOrder = ['quiz', 'photo', 'code', 'timer', 'screenshot'];
++
++String _nextProofType(String current) {
++  final idx = _kProofCycleOrder.indexOf(current);
++  return _kProofCycleOrder[(idx + 1) % _kProofCycleOrder.length];
++}
++
++IconData _proofIcon(String pt) {
++  switch (pt) {
++    case 'quiz': return Icons.quiz_outlined;
++    case 'photo': return Icons.camera_alt_outlined;
++    case 'code': return Icons.code_rounded;
++    case 'timer': return Icons.timer_outlined;
++    case 'screenshot': return Icons.screenshot_monitor_outlined;
++    default: return Icons.edit_outlined;
++  }
++}
++
++Color _proofColor(String pt) {
++  switch (pt) {
++    case 'quiz': return const Color(0xFF7B6EF6);
++    case 'photo': return const Color(0xFF4A9EFF);
++    case 'code': return const Color(0xFF2DD4BF);
++    case 'timer': return const Color(0xFFFFB156);
++    case 'screenshot': return const Color(0xFFFF6B9D);
++    default: return const Color(0xFF9898B8);
++  }
++}
++
++// ─── ProofTypeCycleChip ──────────────────────────────────────────
++class _ProofTypeCycleChip extends StatelessWidget {
++  final String proofType;
++  final VoidCallback onCycle;
++
++  const _ProofTypeCycleChip({required this.proofType, required this.onCycle});
++
+   @override
+-  ConsumerState<CreateRoadmapScreen> createState() => _CreateRoadmapScreenState();
++  Widget build(BuildContext context) {
++    final color = _proofColor(proofType);
++    final icon = _proofIcon(proofType);
++    return GestureDetector(
++      onTap: onCycle,
++      child: AnimatedContainer(
++        duration: const Duration(milliseconds: 200),
++        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
++        decoration: BoxDecoration(
++          color: color.withOpacity(0.15),
++          borderRadius: BorderRadius.circular(20),
++          border: Border.all(color: color.withOpacity(0.6), width: 1),
++        ),
++        child: Row(
++          mainAxisSize: MainAxisSize.min,
++          children: [
++            Icon(icon, size: 13, color: color),
++            const SizedBox(width: 5),
++            Text(
++              proofType,
++              style: GoogleFonts.spaceMono(
++                fontSize: 11,
++                fontWeight: FontWeight.w700,
++                color: color,
++              ),
++            ),
++            const SizedBox(width: 4),
++            Icon(Icons.swap_horiz_rounded, size: 12, color: color.withOpacity(0.7)),
++          ],
++        ),
++      ),
++    );
++  }
+ }
+ 
++// ─── Manual Sub-Level Data ───────────────────────────────────────
++class _ManualSubLevel {
++  final TextEditingController controller;
++  String proofType;
++
++  _ManualSubLevel({required String title, String initialProofType = 'quiz'})
++      : controller = TextEditingController(text: title),
++        proofType = initialProofType;
++
++  void dispose() => controller.dispose();
++}
++
++// ─── Manual Level Data ───────────────────────────────────────────
+ class _ManualLevel {
+   final TextEditingController controller;
+-  String proofType; // 'quiz', 'timer', 'code'
+-  _ManualLevel({required String title, required this.proofType})
+-      : controller = TextEditingController(text: title);
++  String proofType;
++  final List<_ManualSubLevel> subLevels;
++  bool isExpanded;
++
++  _ManualLevel({
++    required String title,
++    String proofType = 'quiz',
++    bool isExpanded = false,
++  })  : controller = TextEditingController(text: title),
++        proofType = proofType,
++        isExpanded = isExpanded,
++        subLevels = [];
+ 
+   void dispose() {
+     controller.dispose();
++    for (final s in subLevels) {
++      s.dispose();
++    }
+   }
+ }
+ 
++// ─── Main Screen ─────────────────────────────────────────────────
++class CreateRoadmapScreen extends ConsumerStatefulWidget {
++  const CreateRoadmapScreen({super.key});
++  @override
++  ConsumerState<CreateRoadmapScreen> createState() => _CreateRoadmapScreenState();
++}
++
+ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
+     with SingleTickerProviderStateMixin {
+   late TabController _tabController;
+   final _titleCtrl = TextEditingController();
+   final _descCtrl = TextEditingController();
+-  
++
+   // AI Goal inputs
+   final _aiGoalTitleCtrl = TextEditingController();
+   final _aiGoalDescCtrl = TextEditingController();
+ 
+   String _selectedType = 'study';
++  String _mapStyle = 'simple'; // 'simple' or 'sublevels'
+   bool _examMode = false;
+   DateTime? _deadline;
+-  String _source = 'manual'; // manual / ai
+   String _titleError = '';
+   String _aiTitleError = '';
+-  
++
+   // Manual Levels
+   final List<_ManualLevel> _manualLevels = [
+     _ManualLevel(title: 'Level 1: Introduction', proofType: 'quiz')
+@@ -56,7 +155,7 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
+ 
+   // AI Loading & Preview States
+   bool _isGeneratingAI = false;
+-  bool _isCreating = false; // Separate from provider isLoading for button UX
++  bool _isCreating = false;
+   int _loadingMsgIdx = 0;
+   Timer? _loadingTimer;
+   List<Map<String, dynamic>>? _generatedLevelsPreview;
+@@ -79,9 +178,6 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
+   void initState() {
+     super.initState();
+     _tabController = TabController(length: 2, vsync: this);
+-    _tabController.addListener(() => setState(() {
+-      _source = _tabController.index == 0 ? 'manual' : 'ai';
+-    }));
+   }
+ 
+   @override
+@@ -256,7 +352,6 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
+       _loadingMsgIdx = 0;
+     });
+ 
+-    // Animate loading text
+     _loadingTimer = Timer.periodic(const Duration(milliseconds: 1000), (timer) {
+       if (mounted && _isGeneratingAI) {
+         setState(() {
+@@ -266,12 +361,10 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
+     });
+ 
+     try {
+-      // ── Check for user-stored OpenAI API key ─────────────────
+       final prefs = await SharedPreferences.getInstance();
+       final apiKey = prefs.getString('openai_api_key') ?? '';
+ 
+       if (apiKey.isNotEmpty) {
+-        // ── Real OpenAI call ──────────────────────────────────
+         final openAiDio = Dio(BaseOptions(
+           connectTimeout: const Duration(seconds: 20),
+           receiveTimeout: const Duration(seconds: 30),
+@@ -320,7 +413,6 @@ Rules:
+           },
+         );
+         final content = aiResponse.data['choices'][0]['message']['content'] as String;
+-        // Strip possible markdown code fences
+         final cleaned = content
+             .replaceAll('```json', '')
+             .replaceAll('```', '')
+@@ -342,13 +434,11 @@ Rules:
+         return;
+       }
+ 
+-      // ── No API key: use smart local templates ─────────────
+       throw Exception('no_key');
+     } catch (_) {
+-      // Fallback: local template with short simulated delay
+       await Future.delayed(const Duration(milliseconds: 800));
+       final levels = _generateSmartRoadmap(
+-        title, _aiGoalDescCtrl.text.trim(), _selectedType);
++        _aiGoalTitleCtrl.text.trim(), _aiGoalDescCtrl.text.trim(), _selectedType);
+       if (mounted) {
+         setState(() {
+           _isGeneratingAI = false;
+@@ -372,7 +462,6 @@ Rules:
+     final title = _aiGoalTitleCtrl.text.trim();
+     final description = _aiGoalDescCtrl.text.trim();
+ 
+-    // Read updated level titles from preview controllers
+     final List<Map<String, dynamic>> finalizedLevels = [];
+     for (int i = 0; i < _generatedLevelsPreview!.length; i++) {
+       final item = Map<String, dynamic>.from(_generatedLevelsPreview![i]);
+@@ -387,6 +476,7 @@ Rules:
+           : 'AI generated roadmap for $title',
+       'type': _selectedType,
+       'source': 'ai',
++      'mapStyle': _mapStyle,
+       'examMode': false,
+       'levels': finalizedLevels,
+     };
+@@ -422,11 +512,11 @@ Rules:
+       _isCreating = true;
+     });
+ 
+-    // Format levels
++    // Build levels payload (with subLevels if mapStyle == 'sublevels')
+     final levelsPayload = _manualLevels.asMap().entries.map((entry) {
+       final index = entry.key;
+       final lvl = entry.value;
+-      return {
++      final baseLevel = {
+         'levelNumber': index + 1,
+         'title': lvl.controller.text.trim().isNotEmpty
+             ? lvl.controller.text.trim()
+@@ -436,6 +526,21 @@ Rules:
+         'estimatedMinutes': 45,
+         'xpReward': 100,
+       };
++      if (_mapStyle == 'sublevels' && lvl.subLevels.isNotEmpty) {
++        baseLevel['subLevels'] = lvl.subLevels.asMap().entries.map((se) {
++          return {
++            'id': 'sub-${se.key}',
++            'title': se.value.controller.text.trim().isNotEmpty
++                ? se.value.controller.text.trim()
++                : 'Sub-topic ${se.key + 1}',
++            'description': '',
++            'proofType': se.value.proofType,
++            'orderIndex': se.key,
++            'isCompleted': false,
++          };
++        }).toList();
++      }
++      return baseLevel;
+     }).toList();
+ 
+     final payload = {
+@@ -443,6 +548,7 @@ Rules:
+       'description': _descCtrl.text.trim(),
+       'type': _selectedType,
+       'source': 'manual',
++      'mapStyle': _mapStyle,
+       'examMode': _examMode,
+       if (_deadline != null) 'deadline': _deadline!.toIso8601String(),
+       'levels': levelsPayload,
+@@ -462,12 +568,94 @@ Rules:
+     }
+   }
+ 
++  // ─── Map Style Selector ─────────────────────────────────────────
++  Widget _buildMapStyleSelector() {
++    return Column(
++      crossAxisAlignment: CrossAxisAlignment.start,
++      children: [
++        Text('Map Style', style: AppTextStyles.label),
++        const SizedBox(height: 10),
++        Row(
++          children: [
++            Expanded(child: _MapStyleCard(
++              title: 'Simple Levels',
++              description: 'One level at a time, step by step',
++              icon: _LinearChainIcon(color: _mapStyle == 'simple' ? AppColors.brand : AppColors.textMuted),
++              isSelected: _mapStyle == 'simple',
++              onTap: () => setState(() => _mapStyle = 'simple'),
++            )),
++            const SizedBox(width: 10),
++            Expanded(child: _MapStyleCard(
++              title: 'Topics & Sub-topics',
++              description: 'Main topics with detailed sub-tasks',
++              example: 'Arrays → Two Pointer, Sliding Window',
++              icon: _BranchTreeIcon(color: _mapStyle == 'sublevels' ? AppColors.brand : AppColors.textMuted),
++              isSelected: _mapStyle == 'sublevels',
++              onTap: () => setState(() => _mapStyle = 'sublevels'),
++            )),
++          ],
++        ),
++      ],
++    );
++  }
++
++  // ─── Manual Level List ──────────────────────────────────────────
++  Widget _buildManualLevelList() {
++    return ReorderableListView.builder(
++      shrinkWrap: true,
++      physics: const NeverScrollableScrollPhysics(),
++      itemCount: _manualLevels.length,
++      itemBuilder: (ctx, index) {
++        final lvl = _manualLevels[index];
++        return _ManualLevelTile(
++          key: ValueKey(lvl),
++          lvl: lvl,
++          index: index,
++          showSubLevels: _mapStyle == 'sublevels',
++          onDelete: () {
++            if (_manualLevels.length > 1) {
++              setState(() {
++                lvl.dispose();
++                _manualLevels.removeAt(index);
++              });
++            } else {
++              ScaffoldMessenger.of(context).showSnackBar(
++                const SnackBar(content: Text('At least 1 level is required')),
++              );
++            }
++          },
++          onProofTypeCycle: () => setState(() {
++            lvl.proofType = _nextProofType(lvl.proofType);
++          }),
++          onToggleExpanded: () => setState(() {
++            lvl.isExpanded = !lvl.isExpanded;
++          }),
++          onAddSubLevel: () => setState(() {
++            lvl.subLevels.add(_ManualSubLevel(title: 'Sub-topic ${lvl.subLevels.length + 1}'));
++          }),
++          onDeleteSubLevel: (si) => setState(() {
++            lvl.subLevels[si].dispose();
++            lvl.subLevels.removeAt(si);
++          }),
++          onSubProofCycle: (si) => setState(() {
++            lvl.subLevels[si].proofType = _nextProofType(lvl.subLevels[si].proofType);
++          }),
++          onRebuild: () => setState(() {}),
++        );
++      },
++      onReorder: (oldIdx, newIdx) {
++        setState(() {
++          if (newIdx > oldIdx) newIdx -= 1;
++          final item = _manualLevels.removeAt(oldIdx);
++          _manualLevels.insert(newIdx, item);
++        });
++      },
++    );
++  }
++
+   @override
+   Widget build(BuildContext context) {
+-    // Use local _isCreating instead of provider isLoading for button state
+-    // so only the tapped button spins, not every button on the page.
+     final roadmapState = ref.watch(roadmapProvider);
+-    // Re-use provider error if needed
+     if (roadmapState.error != null) {
+       WidgetsBinding.instance.addPostFrameCallback((_) {
+         if (mounted && !_isCreating) {
+@@ -513,7 +701,7 @@ Rules:
+       return Scaffold(
+         backgroundColor: const Color(0xFF0A0A0F),
+         appBar: AppBar(
+-          title: Text('Preview Roadmap Map', style: AppTextStyles.h3),
++          title: Text('Preview Roadmap', style: AppTextStyles.h3),
+           backgroundColor: Colors.transparent,
+           leading: IconButton(
+             icon: const Icon(Icons.close, color: AppColors.textPrimary),
+@@ -526,7 +714,7 @@ Rules:
+             child: Column(
+               crossAxisAlignment: CrossAxisAlignment.start,
+               children: [
+-                Text('Customize your milestone titles below before creating:',
++                Text('Customize your milestone titles before creating:',
+                     style: GoogleFonts.inter(
+                         fontSize: 14, color: AppColors.textSecondary)),
+                 const SizedBox(height: 16),
+@@ -577,16 +765,12 @@ Rules:
+                                     ),
+                                   ),
+                                   const SizedBox(height: 4),
+-                                  Row(
+-                                    children: [
+-                                      Text(
+-                                        '$proof • ${mins}m • $xp XP',
+-                                        style: GoogleFonts.inter(
+-                                          fontSize: 11,
+-                                          color: AppColors.textMuted,
+-                                        ),
+-                                      ),
+-                                    ],
++                                  Text(
++                                    '$proof • ${mins}m • $xp XP',
++                                    style: GoogleFonts.inter(
++                                      fontSize: 11,
++                                      color: AppColors.textMuted,
++                                    ),
+                                   ),
+                                 ],
+                               ),
+@@ -599,7 +783,7 @@ Rules:
+                 ),
+                 const SizedBox(height: 16),
+                 StepUpButton(
+-                  label: _isCreating ? 'Saving Roadmap...' : 'Save & Start Roadmap Map 🚀',
++                  label: _isCreating ? 'Saving Roadmap...' : 'Save & Start Roadmap 🚀',
+                   isLoading: _isCreating,
+                   onPressed: _isCreating ? null : _saveAI,
+                 ),
+@@ -635,7 +819,7 @@ Rules:
+       body: TabBarView(
+         controller: _tabController,
+         children: [
+-          // Manual Tab
++          // ── Manual Tab ─────────────────────────────────────────
+           SingleChildScrollView(
+             physics: const BouncingScrollPhysics(),
+             padding: const EdgeInsets.all(AppSpacing.pagePadding),
+@@ -657,6 +841,8 @@ Rules:
+                   maxLines: 2,
+                 ).animate().fadeIn(delay: 150.ms),
+                 const SizedBox(height: AppSpacing.xl),
++
++                // Category
+                 Text('Category', style: AppTextStyles.label).animate().fadeIn(delay: 200.ms),
+                 const SizedBox(height: AppSpacing.sm),
+                 Wrap(
+@@ -689,8 +875,12 @@ Rules:
+                   }).toList(),
+                 ).animate().fadeIn(delay: 200.ms),
+                 const SizedBox(height: AppSpacing.xl),
+-                
+-                // Add Levels Section
++
++                // Map Style Selector
++                _buildMapStyleSelector().animate().fadeIn(delay: 220.ms),
++                const SizedBox(height: AppSpacing.xl),
++
++                // Milestones header
+                 Row(
+                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                   children: [
+@@ -714,95 +904,11 @@ Rules:
+                 ).animate().fadeIn(delay: 250.ms),
+                 const SizedBox(height: AppSpacing.sm),
+ 
+-                // Drag to reorder list of levels
+                 if (_manualLevels.isNotEmpty)
+-                  ReorderableListView.builder(
+-                    shrinkWrap: true,
+-                    physics: const NeverScrollableScrollPhysics(),
+-                    itemCount: _manualLevels.length,
+-                    itemBuilder: (ctx, index) {
+-                      final lvl = _manualLevels[index];
+-                      return Container(
+-                        key: ValueKey(lvl),
+-                        margin: const EdgeInsets.only(bottom: 8),
+-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+-                        decoration: BoxDecoration(
+-                          color: const Color(0xFF12121A),
+-                          borderRadius: BorderRadius.circular(12),
+-                          border: Border.all(color: const Color(0xFF1E1E2E)),
+-                        ),
+-                        child: Row(
+-                          children: [
+-                            const Icon(Icons.drag_indicator, color: AppColors.textMuted, size: 20),
+-                            const SizedBox(width: 8),
+-                            CircleAvatar(
+-                              radius: 12,
+-                              backgroundColor: AppColors.brand.withOpacity(0.15),
+-                              child: Text(
+-                                '${index + 1}',
+-                                style: GoogleFonts.syne(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.brand),
+-                              ),
+-                            ),
+-                            const SizedBox(width: 12),
+-                            Expanded(
+-                              child: TextField(
+-                                controller: lvl.controller,
+-                                style: GoogleFonts.inter(fontSize: 14, color: Colors.white),
+-                                decoration: const InputDecoration(
+-                                  border: InputBorder.none,
+-                                  isDense: true,
+-                                  contentPadding: EdgeInsets.zero,
+-                                  hintText: 'Level title',
+-                                  hintStyle: TextStyle(color: AppColors.textMuted),
+-                                ),
+-                              ),
+-                            ),
+-                            const SizedBox(width: 8),
+-                            DropdownButton<String>(
+-                              value: lvl.proofType,
+-                              dropdownColor: const Color(0xFF12121A),
+-                              underline: const SizedBox(),
+-                              items: const [
+-                                DropdownMenuItem(value: 'quiz', child: Text('Quiz 📝', style: TextStyle(fontSize: 13))),
+-                                DropdownMenuItem(value: 'timer', child: Text('Timer ⏱️', style: TextStyle(fontSize: 13))),
+-                                DropdownMenuItem(value: 'code', child: Text('Code 💻', style: TextStyle(fontSize: 13))),
+-                              ],
+-                              onChanged: (val) {
+-                                if (val != null) {
+-                                  setState(() => lvl.proofType = val);
+-                                }
+-                              },
+-                            ),
+-                            IconButton(
+-                              icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 18),
+-                              onPressed: () {
+-                                if (_manualLevels.length > 1) {
+-                                  setState(() {
+-                                    lvl.dispose();
+-                                    _manualLevels.removeAt(index);
+-                                  });
+-                                } else {
+-                                  ScaffoldMessenger.of(context).showSnackBar(
+-                                    const SnackBar(content: Text('At least 1 level is required')),
+-                                  );
+-                                }
+-                              },
+-                            )
+-                          ],
+-                        ),
+-                      );
+-                    },
+-                    onReorder: (oldIdx, newIdx) {
+-                      setState(() {
+-                        if (newIdx > oldIdx) newIdx -= 1;
+-                        final item = _manualLevels.removeAt(oldIdx);
+-                        _manualLevels.insert(newIdx, item);
+-                      });
+-                    },
+-                  ).animate().fadeIn(delay: 260.ms),
++                  _buildManualLevelList().animate().fadeIn(delay: 260.ms),
+ 
+                 const SizedBox(height: AppSpacing.base),
+-                
++
+                 // Exam Mode Switch
+                 Row(
+                   children: [
+@@ -822,8 +928,7 @@ Rules:
+                     ),
+                   ],
+                 ).animate().fadeIn(delay: 280.ms),
+-                
+-                // Deadline Date Picker
++
+                 if (_examMode) ...[
+                   const SizedBox(height: AppSpacing.md),
+                   GestureDetector(
+@@ -865,7 +970,7 @@ Rules:
+ 
+                 const SizedBox(height: AppSpacing.xxxl),
+                 StepUpButton(
+-                  label: _isCreating ? 'Creating Roadmap...' : 'Create Roadmap Map 🚀',
++                  label: _isCreating ? 'Creating Roadmap...' : 'Create Roadmap 🚀',
+                   isLoading: _isCreating,
+                   onPressed: _isCreating ? null : _createManual,
+                 ).animate().fadeIn(delay: 350.ms),
+@@ -873,7 +978,7 @@ Rules:
+             ),
+           ),
+ 
+-          // AI Generate Tab
++          // ── AI Generate Tab ────────────────────────────────────
+           SingleChildScrollView(
+             padding: const EdgeInsets.all(AppSpacing.pagePadding),
+             child: Column(
+@@ -885,21 +990,14 @@ Rules:
+                   future: SharedPreferences.getInstance().then(
+                     (prefs) => prefs.getString('openai_api_key') ?? ''),
+                   builder: (ctx, snap) {
+-                    final hasKey =
+-                        (snap.data ?? '').isNotEmpty;
++                    final hasKey = (snap.data ?? '').isNotEmpty;
+                     return Container(
+                       padding: const EdgeInsets.all(AppSpacing.base),
+                       decoration: BoxDecoration(
+                         gradient: LinearGradient(
+                           colors: hasKey
+-                              ? [
+-                                  const Color(0xFF0D2B1A),
+-                                  const Color(0xFF12121A)
+-                                ]
+-                              : [
+-                                  const Color(0xFF1A1040),
+-                                  const Color(0xFF12121A)
+-                                ],
++                              ? [const Color(0xFF0D2B1A), const Color(0xFF12121A)]
++                              : [const Color(0xFF1A1040), const Color(0xFF12121A)],
+                         ),
+                         borderRadius: BorderRadius.circular(16),
+                         border: Border.all(
+@@ -910,9 +1008,10 @@ Rules:
+                       ),
+                       child: Row(
+                         children: [
+-                          Text(
+-                            hasKey ? '✅' : '✨',
+-                            style: const TextStyle(fontSize: 24),
++                          Icon(
++                            hasKey ? Icons.check_circle_rounded : Icons.auto_awesome_rounded,
++                            color: hasKey ? AppColors.green : AppColors.brand,
++                            size: 28,
+                           ),
+                           const SizedBox(width: AppSpacing.md),
+                           Expanded(
+@@ -920,15 +1019,11 @@ Rules:
+                               crossAxisAlignment: CrossAxisAlignment.start,
+                               children: [
+                                 Text(
+-                                  hasKey
+-                                      ? 'OpenAI API active'
+-                                      : 'Smart Local Generation',
++                                  hasKey ? 'OpenAI API active' : 'Smart Local Generation',
+                                   style: GoogleFonts.spaceMono(
+                                     fontSize: 13,
+                                     fontWeight: FontWeight.bold,
+-                                    color: hasKey
+-                                        ? AppColors.green
+-                                        : AppColors.textPrimary,
++                                    color: hasKey ? AppColors.green : AppColors.textPrimary,
+                                   ),
+                                 ),
+                                 const SizedBox(height: 2),
+@@ -941,22 +1036,20 @@ Rules:
+                                     color: AppColors.textSecondary,
+                                   ),
+                                 ),
+-                                if (!hasKey) ...
+-                                  [
+-                                    const SizedBox(height: 6),
+-                                    GestureDetector(
+-                                      onTap: () =>
+-                                          context.push(AppRoutes.settings),
+-                                      child: Text(
+-                                        'Add OpenAI key →',
+-                                        style: GoogleFonts.inter(
+-                                          fontSize: 12,
+-                                          fontWeight: FontWeight.w600,
+-                                          color: AppColors.brand,
+-                                        ),
++                                if (!hasKey) ...[
++                                  const SizedBox(height: 6),
++                                  GestureDetector(
++                                    onTap: () => context.push(AppRoutes.settings),
++                                    child: Text(
++                                      'Add OpenAI key →',
++                                      style: GoogleFonts.inter(
++                                        fontSize: 12,
++                                        fontWeight: FontWeight.w600,
++                                        color: AppColors.brand,
+                                       ),
+                                     ),
+-                                  ],
++                                  ),
++                                ],
+                               ],
+                             ),
+                           ),
+@@ -1011,6 +1104,8 @@ Rules:
+                     );
+                   }).toList(),
+                 ),
++                const SizedBox(height: AppSpacing.xl),
++                _buildMapStyleSelector(),
+                 const SizedBox(height: AppSpacing.xxxl),
+                 StepUpButton(
+                   label: 'Generate with AI ✨',
+@@ -1025,3 +1120,354 @@ Rules:
+     );
+   }
+ }
++
++// ─── Map Style Card ──────────────────────────────────────────────
++class _MapStyleCard extends StatelessWidget {
++  final String title;
++  final String description;
++  final String? example;
++  final Widget icon;
++  final bool isSelected;
++  final VoidCallback onTap;
++
++  const _MapStyleCard({
++    required this.title,
++    required this.description,
++    this.example,
++    required this.icon,
++    required this.isSelected,
++    required this.onTap,
++  });
++
++  @override
++  Widget build(BuildContext context) {
++    return GestureDetector(
++      onTap: onTap,
++      child: AnimatedContainer(
++        duration: const Duration(milliseconds: 200),
++        padding: const EdgeInsets.all(14),
++        decoration: BoxDecoration(
++          color: isSelected
++              ? AppColors.brand.withOpacity(0.12)
++              : const Color(0xFF12121A),
++          borderRadius: BorderRadius.circular(16),
++          border: Border.all(
++            color: isSelected ? AppColors.brand : const Color(0xFF1E1E2E),
++            width: isSelected ? 1.5 : 1,
++          ),
++          boxShadow: isSelected
++              ? [BoxShadow(color: AppColors.brand.withOpacity(0.2), blurRadius: 12)]
++              : null,
++        ),
++        child: Column(
++          crossAxisAlignment: CrossAxisAlignment.start,
++          children: [
++            icon,
++            const SizedBox(height: 10),
++            Text(
++              title,
++              style: GoogleFonts.spaceMono(
++                fontSize: 12,
++                fontWeight: FontWeight.bold,
++                color: isSelected ? AppColors.brand : AppColors.textPrimary,
++              ),
++            ),
++            const SizedBox(height: 4),
++            Text(
++              description,
++              style: GoogleFonts.inter(
++                fontSize: 11,
++                color: AppColors.textSecondary,
++                height: 1.4,
++              ),
++            ),
++            if (example != null) ...[
++              const SizedBox(height: 6),
++              Text(
++                example!,
++                style: GoogleFonts.inter(
++                  fontSize: 10,
++                  color: AppColors.textMuted,
++                  fontStyle: FontStyle.italic,
++                  height: 1.3,
++                ),
++              ),
++            ],
++          ],
++        ),
++      ),
++    );
++  }
++}
++
++// ─── Linear Chain Icon ───────────────────────────────────────────
++class _LinearChainIcon extends StatelessWidget {
++  final Color color;
++  const _LinearChainIcon({required this.color});
++
++  @override
++  Widget build(BuildContext context) {
++    return Row(
++      mainAxisSize: MainAxisSize.min,
++      children: [
++        Container(
++          width: 10, height: 10,
++          decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: color, width: 2)),
++        ),
++        Container(height: 2, width: 8, color: color),
++        Container(
++          width: 10, height: 10,
++          decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: color, width: 2)),
++        ),
++        Container(height: 2, width: 8, color: color),
++        Container(
++          width: 10, height: 10,
++          decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: color, width: 2)),
++        ),
++      ],
++    );
++  }
++}
++
++// ─── Branch Tree Icon ────────────────────────────────────────────
++class _BranchTreeIcon extends StatelessWidget {
++  final Color color;
++  const _BranchTreeIcon({required this.color});
++
++  @override
++  Widget build(BuildContext context) {
++    return SizedBox(
++      width: 38, height: 24,
++      child: CustomPaint(painter: _BranchPainter(color: color)),
++    );
++  }
++}
++
++class _BranchPainter extends CustomPainter {
++  final Color color;
++  const _BranchPainter({required this.color});
++
++  @override
++  void paint(Canvas canvas, Size size) {
++    final paint = Paint()
++      ..color = color
++      ..strokeWidth = 1.5
++      ..style = PaintingStyle.stroke
++      ..strokeCap = StrokeCap.round;
++    final fill = Paint()..color = color..style = PaintingStyle.fill;
++
++    // Root node
++    canvas.drawCircle(Offset(6, size.height / 2), 4, fill);
++    // Main trunk
++    canvas.drawLine(Offset(10, size.height / 2), Offset(18, size.height / 2), paint);
++    // Branch up
++    canvas.drawLine(Offset(18, size.height / 2), Offset(22, 4), paint);
++    canvas.drawCircle(Offset(26, 4), 3.5, paint);
++    // Branch middle
++    canvas.drawLine(Offset(18, size.height / 2), Offset(26, size.height / 2), paint);
++    canvas.drawCircle(Offset(30, size.height / 2), 3.5, paint);
++    // Branch down
++    canvas.drawLine(Offset(18, size.height / 2), Offset(22, size.height - 4), paint);
++    canvas.drawCircle(Offset(26, size.height - 4), 3.5, paint);
++  }
++
++  @override
++  bool shouldRepaint(covariant _BranchPainter old) => old.color != color;
++}
++
++// ─── Manual Level Tile ───────────────────────────────────────────
++class _ManualLevelTile extends StatelessWidget {
++  final _ManualLevel lvl;
++  final int index;
++  final bool showSubLevels;
++  final VoidCallback onDelete;
++  final VoidCallback onProofTypeCycle;
++  final VoidCallback onToggleExpanded;
++  final VoidCallback onAddSubLevel;
++  final void Function(int) onDeleteSubLevel;
++  final void Function(int) onSubProofCycle;
++  final VoidCallback onRebuild;
++
++  const _ManualLevelTile({
++    required super.key,
++    required this.lvl,
++    required this.index,
++    required this.showSubLevels,
++    required this.onDelete,
++    required this.onProofTypeCycle,
++    required this.onToggleExpanded,
++    required this.onAddSubLevel,
++    required this.onDeleteSubLevel,
++    required this.onSubProofCycle,
++    required this.onRebuild,
++  });
++
++  @override
++  Widget build(BuildContext context) {
++    return Container(
++      margin: const EdgeInsets.only(bottom: 8),
++      decoration: BoxDecoration(
++        color: const Color(0xFF12121A),
++        borderRadius: BorderRadius.circular(12),
++        border: Border.all(color: const Color(0xFF1E1E2E)),
++      ),
++      child: Column(
++        crossAxisAlignment: CrossAxisAlignment.start,
++        children: [
++          // Main level row
++          Padding(
++            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
++            child: Row(
++              children: [
++                const Icon(Icons.drag_indicator, color: AppColors.textMuted, size: 20),
++                const SizedBox(width: 8),
++                CircleAvatar(
++                  radius: 12,
++                  backgroundColor: AppColors.brand.withOpacity(0.15),
++                  child: Text(
++                    '${index + 1}',
++                    style: GoogleFonts.syne(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.brand),
++                  ),
++                ),
++                const SizedBox(width: 12),
++                Expanded(
++                  child: TextField(
++                    controller: lvl.controller,
++                    style: GoogleFonts.inter(fontSize: 14, color: Colors.white),
++                    decoration: const InputDecoration(
++                      border: InputBorder.none,
++                      isDense: true,
++                      contentPadding: EdgeInsets.zero,
++                      hintText: 'Level title',
++                      hintStyle: TextStyle(color: AppColors.textMuted),
++                    ),
++                  ),
++                ),
++                const SizedBox(width: 6),
++                _ProofTypeCycleChip(
++                  proofType: lvl.proofType,
++                  onCycle: onProofTypeCycle,
++                ),
++                if (showSubLevels) ...[
++                  const SizedBox(width: 4),
++                  GestureDetector(
++                    onTap: onToggleExpanded,
++                    child: Icon(
++                      lvl.isExpanded ? Icons.expand_less : Icons.expand_more,
++                      color: AppColors.textMuted,
++                      size: 20,
++                    ),
++                  ),
++                ],
++                IconButton(
++                  icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 18),
++                  onPressed: onDelete,
++                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
++                  padding: EdgeInsets.zero,
++                ),
++              ],
++            ),
++          ),
++
++          // Sub-levels section (only in sublevels mode + expanded)
++          if (showSubLevels && lvl.isExpanded) ...[
++            const Divider(height: 1, color: Color(0xFF1E1E2E)),
++            Padding(
++              padding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
++              child: Column(
++                crossAxisAlignment: CrossAxisAlignment.start,
++                children: [
++                  for (int si = 0; si < lvl.subLevels.length; si++)
++                    _SubLevelRow(
++                      subLevel: lvl.subLevels[si],
++                      label: '${index + 1}.${si + 1}',
++                      onDelete: () => onDeleteSubLevel(si),
++                      onProofCycle: () => onSubProofCycle(si),
++                    ),
++                  const SizedBox(height: 6),
++                  GestureDetector(
++                    onTap: onAddSubLevel,
++                    child: Row(
++                      mainAxisSize: MainAxisSize.min,
++                      children: [
++                        Icon(Icons.add_circle_outline, size: 14, color: AppColors.brand.withOpacity(0.8)),
++                        const SizedBox(width: 6),
++                        Text(
++                          '+ Add Sub-topic',
++                          style: GoogleFonts.inter(
++                            fontSize: 12,
++                            color: AppColors.brand,
++                            fontWeight: FontWeight.w600,
++                          ),
++                        ),
++                      ],
++                    ),
++                  ),
++                ],
++              ),
++            ),
++          ],
++        ],
++      ),
++    );
++  }
++}
++
++// ─── Sub-Level Row ───────────────────────────────────────────────
++class _SubLevelRow extends StatelessWidget {
++  final _ManualSubLevel subLevel;
++  final String label;
++  final VoidCallback onDelete;
++  final VoidCallback onProofCycle;
++
++  const _SubLevelRow({
++    required this.subLevel,
++    required this.label,
++    required this.onDelete,
++    required this.onProofCycle,
++  });
++
++  @override
++  Widget build(BuildContext context) {
++    return Padding(
++      padding: const EdgeInsets.only(bottom: 6),
++      child: Row(
++        children: [
++          SizedBox(
++            width: 32,
++            child: Text(
++              label,
++              style: GoogleFonts.spaceMono(
++                fontSize: 10,
++                color: AppColors.brand.withOpacity(0.8),
++                fontWeight: FontWeight.w700,
++              ),
++            ),
++          ),
++          Expanded(
++            child: TextField(
++              controller: subLevel.controller,
++              style: GoogleFonts.inter(fontSize: 13, color: AppColors.textPrimary),
++              decoration: const InputDecoration(
++                border: InputBorder.none,
++                isDense: true,
++                contentPadding: EdgeInsets.zero,
++                hintText: 'Sub-topic title',
++                hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 13),
++              ),
++            ),
++          ),
++          const SizedBox(width: 6),
++          _ProofTypeCycleChip(proofType: subLevel.proofType, onCycle: onProofCycle),
++          GestureDetector(
++            onTap: onDelete,
++            child: const Padding(
++              padding: EdgeInsets.only(left: 6),
++              child: Icon(Icons.close, size: 14, color: AppColors.error),
++            ),
++          ),
++        ],
++      ),
++    );
++  }
++}
+diff --git a/lib/models/level_model.dart b/lib/models/level_model.dart
+index d417c04..48a8e0f 100644
+--- a/lib/models/level_model.dart
++++ b/lib/models/level_model.dart
+@@ -5,6 +5,94 @@ typedef LevelStatus = LevelState;
+ 
+ enum ProofType { quiz, photo, code, voice, timer, screenshot, text }
+ 
++// ─── SubLevel Model ───────────────────────────────────────────────
++class SubLevel {
++  final String id;
++  final String parentLevelId;
++  final String title;
++  final String description;
++  final String proofType; // quiz/photo/code/timer/screenshot/text
++  final bool isCompleted;
++  final int orderIndex;
++  final DateTime? completedAt;
++
++  const SubLevel({
++    required this.id,
++    required this.parentLevelId,
++    required this.title,
++    this.description = '',
++    this.proofType = 'quiz',
++    this.isCompleted = false,
++    required this.orderIndex,
++    this.completedAt,
++  });
++
++  /// Composite ID used for routing sub-level verifications
++  String get compositeId => '${parentLevelId}__sub__$id';
++
++  /// e.g. "1.1", "1.2" from orderIndex
++  String labelFor(int parentNumber) =>
++      '$parentNumber.${orderIndex + 1}';
++
++  factory SubLevel.fromJson(Map<String, dynamic> json) {
++    return SubLevel(
++      id: json['id'] as String? ?? '',
++      parentLevelId: json['parentLevelId'] as String? ?? '',
++      title: json['title'] as String? ?? '',
++      description: json['description'] as String? ?? '',
++      proofType: json['proofType'] as String? ?? 'quiz',
++      isCompleted: json['isCompleted'] as bool? ?? false,
++      orderIndex: (json['orderIndex'] as num?)?.toInt() ?? 0,
++      completedAt: json['completedAt'] != null
++          ? DateTime.tryParse(json['completedAt'] as String)
++          : null,
++    );
++  }
++
++  Map<String, dynamic> toJson() {
++    return {
++      'id': id,
++      'parentLevelId': parentLevelId,
++      'title': title,
++      'description': description,
++      'proofType': proofType,
++      'isCompleted': isCompleted,
++      'orderIndex': orderIndex,
++      'completedAt': completedAt?.toIso8601String(),
++    };
++  }
++
++  SubLevel copyWith({
++    String? id,
++    String? parentLevelId,
++    String? title,
++    String? description,
++    String? proofType,
++    bool? isCompleted,
++    int? orderIndex,
++    DateTime? completedAt,
++  }) {
++    return SubLevel(
++      id: id ?? this.id,
++      parentLevelId: parentLevelId ?? this.parentLevelId,
++      title: title ?? this.title,
++      description: description ?? this.description,
++      proofType: proofType ?? this.proofType,
++      isCompleted: isCompleted ?? this.isCompleted,
++      orderIndex: orderIndex ?? this.orderIndex,
++      completedAt: completedAt ?? this.completedAt,
++    );
++  }
++
++  @override
++  bool operator ==(Object other) =>
++      identical(this, other) || other is SubLevel && other.id == id;
++
++  @override
++  int get hashCode => id.hashCode;
++}
++
++// ─── LevelModel ───────────────────────────────────────────────────
+ class LevelModel {
+   final String id;
+   final String roadmapId;
+@@ -20,6 +108,7 @@ class LevelModel {
+   final List<String> topics;
+   final String? notes;
+   final Map<String, dynamic>? verificationData;
++  final List<SubLevel> subLevels;
+ 
+   const LevelModel({
+     required this.id,
+@@ -36,12 +125,13 @@ class LevelModel {
+     this.topics = const [],
+     this.notes,
+     this.verificationData,
++    this.subLevels = const [],
+   });
+ 
+   // ── Computed ──────────────────────────────────────────────────
+ 
+   LevelState get state {
+-    if (isCompleted) return LevelState.completed;
++    if (isCompletedActual) return LevelState.completed;
+     if (!isLocked) return LevelState.active;
+     return LevelState.locked;
+   }
+@@ -49,6 +139,22 @@ class LevelModel {
+   /// Alias for state — used by UI widgets
+   LevelState get status => state;
+ 
++  /// If sub-levels exist, the level is truly complete only when ALL sub-levels
++  /// are completed. Falls back to [isCompleted] for simple levels.
++  bool get isCompletedActual {
++    if (subLevels.isEmpty) return isCompleted;
++    return subLevels.every((s) => s.isCompleted);
++  }
++
++  /// Progress fraction 0.0–1.0 for sub-level completion
++  double get subLevelProgress {
++    if (subLevels.isEmpty) return isCompleted ? 1.0 : 0.0;
++    return subLevels.where((s) => s.isCompleted).length / subLevels.length;
++  }
++
++  int get completedSubLevelCount =>
++      subLevels.where((s) => s.isCompleted).length;
++
+   String get proofTypeLabel {
+     switch (proofType) {
+       case 'quiz': return 'Quiz';
+@@ -128,6 +234,10 @@ class LevelModel {
+       notes: json['notes'] as String?,
+       verificationData:
+           json['verificationData'] as Map<String, dynamic>?,
++      subLevels: (json['subLevels'] as List<dynamic>?)
++              ?.map((s) => SubLevel.fromJson(s as Map<String, dynamic>))
++              .toList() ??
++          [],
+     );
+   }
+ 
+@@ -147,6 +257,7 @@ class LevelModel {
+       'topics': topics,
+       'notes': notes,
+       'verificationData': verificationData,
++      'subLevels': subLevels.map((s) => s.toJson()).toList(),
+     };
+   }
+ 
+@@ -165,6 +276,7 @@ class LevelModel {
+     List<String>? topics,
+     String? notes,
+     Map<String, dynamic>? verificationData,
++    List<SubLevel>? subLevels,
+   }) {
+     return LevelModel(
+       id: id ?? this.id,
+@@ -181,6 +293,7 @@ class LevelModel {
+       topics: topics ?? this.topics,
+       notes: notes ?? this.notes,
+       verificationData: verificationData ?? this.verificationData,
++      subLevels: subLevels ?? this.subLevels,
+     );
+   }
+ 
+diff --git a/lib/models/roadmap_model.dart b/lib/models/roadmap_model.dart
+index 6cac0f8..af51938 100644
+--- a/lib/models/roadmap_model.dart
++++ b/lib/models/roadmap_model.dart
+@@ -15,6 +15,8 @@ class RoadmapModel {
+   final String? coverEmoji;
+   final int totalXpReward;
+   final int xpEarned;
++  /// 'simple' or 'sublevels'
++  final String mapStyle;
+ 
+   const RoadmapModel({
+     required this.id,
+@@ -33,10 +35,13 @@ class RoadmapModel {
+     this.coverEmoji,
+     this.totalXpReward = 0,
+     this.xpEarned = 0,
++    this.mapStyle = 'simple',
+   });
+ 
+   // ── Computed Properties ──────────────────────────────────────
+ 
++  bool get hasSubLevels => mapStyle == 'sublevels';
++
+   double get progressPercent {
+     if (totalLevels == 0) return 0.0;
+     return (currentLevel / totalLevels).clamp(0.0, 1.0);
+@@ -111,6 +116,7 @@ class RoadmapModel {
+       coverEmoji: json['coverEmoji'] as String?,
+       totalXpReward: (json['totalXpReward'] as num?)?.toInt() ?? 0,
+       xpEarned: (json['xpEarned'] as num?)?.toInt() ?? 0,
++      mapStyle: json['mapStyle'] as String? ?? 'simple',
+     );
+   }
+ 
+@@ -132,6 +138,7 @@ class RoadmapModel {
+       'coverEmoji': coverEmoji,
+       'totalXpReward': totalXpReward,
+       'xpEarned': xpEarned,
++      'mapStyle': mapStyle,
+     };
+   }
+ 
+@@ -152,6 +159,7 @@ class RoadmapModel {
+     String? coverEmoji,
+     int? totalXpReward,
+     int? xpEarned,
++    String? mapStyle,
+   }) {
+     return RoadmapModel(
+       id: id ?? this.id,
+@@ -170,6 +178,7 @@ class RoadmapModel {
+       coverEmoji: coverEmoji ?? this.coverEmoji,
+       totalXpReward: totalXpReward ?? this.totalXpReward,
+       xpEarned: xpEarned ?? this.xpEarned,
++      mapStyle: mapStyle ?? this.mapStyle,
+     );
+   }
+ 
+@@ -181,5 +190,5 @@ class RoadmapModel {
+   int get hashCode => id.hashCode;
+ 
+   @override
+-  String toString() => 'RoadmapModel($title, $currentLevel/$totalLevels)';
++  String toString() => 'RoadmapModel($title, $currentLevel/$totalLevels, style: $mapStyle)';
+ }
+diff --git a/lib/shared/providers/level_provider.dart b/lib/shared/providers/level_provider.dart
+index 4a2a27d..3e14d86 100644
+--- a/lib/shared/providers/level_provider.dart
++++ b/lib/shared/providers/level_provider.dart
+@@ -116,6 +116,54 @@ List<LevelModel> _mockLevels(String roadmapId) {
+   });
+ }
+ 
++/// Mock levels with sub-levels for demonstration (roadmap id contains 'sub')
++List<LevelModel> _mockSubLevels(String roadmapId) {
++  final topics = [
++    ('Arrays', ['Two Pointer', 'Sliding Window', 'Prefix Sum', 'Kadane\'s Algorithm']),
++    ('Linked Lists', ['Reversal', 'Cycle Detection', 'Merge Sorted', 'Remove N-th Node']),
++    ('Trees', ['Inorder Traversal', 'Level BFS', 'Lowest Common Ancestor', 'Path Sum']),
++    ('Graphs', ['DFS Traversal', 'BFS Traversal', 'Topological Sort', 'Union Find']),
++    ('Dynamic Programming', ['Fibonacci', 'Knapsack 0/1', 'LCS', 'Coin Change']),
++    ('Sorting & Searching', ['Merge Sort', 'Quick Sort', 'Binary Search', 'Counting Sort']),
++  ];
++
++  return List.generate(topics.length, (i) {
++    final (topic, subs) = topics[i];
++    final isCompleted = i < 2;
++    final isActive = i == 2;
++    final levelId = '$roadmapId-level-${i + 1}';
++    final subLevelList = subs.asMap().entries.map((e) {
++      final subIsCompleted = isCompleted || (isActive && e.key < 2);
++      return SubLevel(
++        id: '${levelId}-sub-${e.key}',
++        parentLevelId: levelId,
++        title: e.value,
++        description: 'Learn and practice ${e.value} technique.',
++        proofType: 'quiz',
++        isCompleted: subIsCompleted,
++        orderIndex: e.key,
++      );
++    }).toList();
++    return LevelModel(
++      id: levelId,
++      roadmapId: roadmapId,
++      levelNumber: i + 1,
++      title: topic,
++      description: 'Master $topic and all its sub-techniques.',
++      proofType: 'quiz',
++      estimatedMinutes: 60,
++      isLocked: !isCompleted && !isActive,
++      isCompleted: isCompleted,
++      xpReward: 200,
++      completedAt: isCompleted
++          ? DateTime.now().subtract(Duration(days: topics.length - i))
++          : null,
++      topics: subs,
++      subLevels: subLevelList,
++    );
++  });
++}
++
+ // ─────────────────────────────────────────────────────────────
+ // Notifier
+ // ─────────────────────────────────────────────────────────────
+@@ -138,8 +186,14 @@ class LevelNotifier extends StateNotifier<LevelState> {
+ 
+     if (_isMockMode) {
+       await Future.delayed(const Duration(milliseconds: 500));
++      // Detect if this roadmap is a sublevel demo roadmap
++      final roadmaps = ref.read(roadmapProvider).roadmaps;
++      final roadmap = roadmaps.where((r) => r.id == roadmapId).firstOrNull;
++      final levels = (roadmap?.hasSubLevels ?? false)
++          ? _mockSubLevels(roadmapId)
++          : _mockLevels(roadmapId);
+       state = state.copyWith(
+-        levels: _mockLevels(roadmapId),
++        levels: levels,
+         isLoading: false,
+         hasLoaded: true,
+       );
+@@ -177,6 +231,42 @@ class LevelNotifier extends StateNotifier<LevelState> {
+     state = state.copyWith(levels: updated);
+   }
+ 
++  /// Mark a specific sub-level as complete. If ALL sub-levels complete,
++  /// mark the parent as complete and unlock the next level.
++  void markSubLevelComplete(String parentLevelId, String subLevelId) {
++    final updated = state.levels.map((level) {
++      if (level.id != parentLevelId) return level;
++
++      final newSubLevels = level.subLevels.map((sub) {
++        if (sub.id == subLevelId) {
++          return sub.copyWith(isCompleted: true, completedAt: DateTime.now());
++        }
++        return sub;
++      }).toList();
++
++      final allSubsDone = newSubLevels.every((s) => s.isCompleted);
++      return level.copyWith(
++        subLevels: newSubLevels,
++        isCompleted: allSubsDone,
++        completedAt: allSubsDone ? DateTime.now() : level.completedAt,
++      );
++    }).toList();
++
++    // If parent is now complete, unlock next level
++    final parentLevel =
++        updated.where((l) => l.id == parentLevelId).firstOrNull;
++    final finalList = parentLevel?.isCompleted == true
++        ? updated.map((l) {
++            if (l.levelNumber == (parentLevel!.levelNumber + 1)) {
++              return l.copyWith(isLocked: false);
++            }
++            return l;
++          }).toList()
++        : updated;
++
++    state = state.copyWith(levels: finalList);
++  }
++
+   Future<bool> verifyAndCompleteLevel({
+     required String levelId,
+     required String proofType,
+@@ -184,11 +274,37 @@ class LevelNotifier extends StateNotifier<LevelState> {
+     Map<String, dynamic>? proofData,
+     int timeSpentMinutes = 0,
+   }) async {
+-    // Optimistic update
++    // ── Handle sub-level composite IDs: "parentId__sub__subId" ──
++    if (levelId.contains('__sub__')) {
++      final parts = levelId.split('__sub__');
++      final parentId = parts[0];
++      final subId = parts[1];
++      markSubLevelComplete(parentId, subId);
++
++      if (_isMockMode) {
++        final parent = state.levels.where((l) => l.id == parentId).firstOrNull;
++        if (parent != null) {
++          final xpGain = parent.xpReward ~/ parent.subLevels.length;
++          final user = ref.read(currentUserProvider);
++          if (user != null) {
++            final updatedXp = user.xpTotal + xpGain;
++            ref.read(authProvider.notifier).updateLocalUser(user.copyWith(
++              xpTotal: updatedXp,
++              level: updatedXp ~/ 500 + 1,
++            ));
++            ref.read(todayXpProvider.notifier).addXp(xpGain);
++          }
++        }
++        return true;
++      }
++      // TODO: real API call for sub-level completion
++      return true;
++    }
++
++    // ── Standard level completion ─────────────────────────────
+     markComplete(levelId);
+ 
+     if (_isMockMode) {
+-      // Mock mode: update local XP in mock user
+       final user = ref.read(currentUserProvider);
+       if (user != null) {
+         final targetLvl = state.levels.firstWhere(
+@@ -200,7 +316,6 @@ class LevelNotifier extends StateNotifier<LevelState> {
+           xpTotal: updatedXp,
+           level: updatedXp ~/ 500 + 1,
+         ));
+-        // Persist daily XP
+         ref.read(todayXpProvider.notifier).addXp(targetLvl.xpReward);
+       }
+       return true;
+@@ -218,13 +333,11 @@ class LevelNotifier extends StateNotifier<LevelState> {
+         },
+       );
+       if (response.statusCode == 200) {
+-        // Persist daily XP earned
+         final completedLvl = state.levels.firstWhere(
+           (l) => l.id == levelId,
+           orElse: () => state.levels.first,
+         );
+         ref.read(todayXpProvider.notifier).addXp(completedLvl.xpReward);
+-        // Refresh user profile details & roadmaps list to sync XP & levels
+         await ref.read(authProvider.notifier).getMe();
+         await ref.read(roadmapProvider.notifier).fetchRoadmaps(forceRefresh: true);
+         return true;
+@@ -253,9 +366,44 @@ final levelProvider = StateNotifierProvider.family<LevelNotifier, LevelState, St
+   (ref, roadmapId) => LevelNotifier(roadmapId, ref),
+ );
+ 
+-/// Get a single level by ID across all loaded roadmaps
++/// Get a single level by ID across all loaded roadmaps.
++/// Also resolves composite sub-level IDs: "parentId__sub__subId"
+ final levelByIdProvider = Provider.family<LevelModel?, String>((ref, levelId) {
+-  // Search all dynamic roadmaps loaded in roadmapProvider
++  // ── Sub-level composite ID resolution ──────────────────────
++  if (levelId.contains('__sub__')) {
++    final parts = levelId.split('__sub__');
++    final parentId = parts[0];
++    final subId = parts[1];
++
++    // Find the parent level across all roadmaps
++    final roadmaps = ref.watch(roadmapProvider).roadmaps;
++    for (final r in roadmaps) {
++      final s = ref.watch(levelProvider(r.id));
++      try {
++        final parent = s.levels.firstWhere((l) => l.id == parentId);
++        final sub = parent.subLevels.firstWhere((sl) => sl.id == subId);
++        // Construct a transient LevelModel representing this sub-level
++        return LevelModel(
++          id: sub.compositeId,
++          roadmapId: parent.roadmapId,
++          levelNumber: parent.levelNumber,
++          title: sub.title,
++          description: sub.description,
++          proofType: sub.proofType,
++          estimatedMinutes: parent.estimatedMinutes ~/ parent.subLevels.length,
++          isLocked: !sub.isCompleted && parent.isLocked,
++          isCompleted: sub.isCompleted,
++          xpReward: parent.xpReward ~/ parent.subLevels.length,
++          completedAt: sub.completedAt,
++        );
++      } catch (_) {
++        // not here
++      }
++    }
++    return null;
++  }
++
++  // ── Standard level ID lookup ────────────────────────────────
+   final roadmaps = ref.watch(roadmapProvider).roadmaps;
+   for (final r in roadmaps) {
+     final s = ref.watch(levelProvider(r.id));
+diff --git a/lib/shared/providers/roadmap_provider.dart b/lib/shared/providers/roadmap_provider.dart
+index edc8dbf..e37b67c 100644
+--- a/lib/shared/providers/roadmap_provider.dart
++++ b/lib/shared/providers/roadmap_provider.dart
+@@ -24,6 +24,7 @@ final _mockRoadmaps = [
+     coverEmoji: '🧠',
+     totalXpReward: 4500,
+     xpEarned: 1200,
++    mapStyle: 'simple',
+   ),
+   RoadmapModel(
+     id: 'mock-roadmap-002',
+@@ -38,6 +39,7 @@ final _mockRoadmaps = [
+     coverEmoji: '💪',
+     totalXpReward: 6300,
+     xpEarned: 1800,
++    mapStyle: 'simple',
+   ),
+   RoadmapModel(
+     id: 'mock-roadmap-003',
+@@ -52,6 +54,22 @@ final _mockRoadmaps = [
+     coverEmoji: '🏗️',
+     totalXpReward: 3000,
+     xpEarned: 450,
++    mapStyle: 'simple',
++  ),
++  RoadmapModel(
++    id: 'mock-roadmap-sub-001',
++    userId: 'mock-user-001',
++    title: 'DSA: Topics & Sub-topics',
++    description: 'Master DSA topics with detailed sub-techniques — Arrays, Trees, Graphs and more.',
++    type: 'study',
++    source: 'ai',
++    totalLevels: 6,
++    currentLevel: 3,
++    createdAt: DateTime.now().subtract(const Duration(days: 7)),
++    coverEmoji: '🌿',
++    totalXpReward: 1200,
++    xpEarned: 400,
++    mapStyle: 'sublevels',
+   ),
+ ];
+ 
+@@ -221,6 +239,7 @@ class RoadmapNotifier extends StateNotifier<RoadmapState> {
+       coverEmoji: null,
+       totalXpReward: 0,
+       xpEarned: 0,
++      mapStyle: payload['mapStyle'] as String? ?? 'simple',
+     );
+ 
+     // Insert immediately into state so the UI is instant

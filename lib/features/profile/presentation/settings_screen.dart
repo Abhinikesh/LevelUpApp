@@ -19,6 +19,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _friendActivity = false;
   bool _weeklySummary = true;
 
+  // Theme configuration
+  int _currentThemeIndex = 0;
+
   // AI Configuration
   final _openAiKeyCtrl = TextEditingController();
   bool _showApiKey = false;
@@ -28,6 +31,151 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void initState() {
     super.initState();
     _loadApiKey();
+    _loadThemePref();
+  }
+
+  Future<void> _loadThemePref() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _currentThemeIndex = prefs.getInt('map_bg_theme') ?? 0;
+      });
+    }
+  }
+
+  Future<void> _saveThemePref(int index) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('map_bg_theme', index);
+    if (mounted) {
+      setState(() => _currentThemeIndex = index);
+    }
+  }
+
+  String _themeName(int index) {
+    switch (index) {
+      case 0:
+        return 'Dark Purple';
+      case 1:
+        return 'Deep Ocean';
+      case 2:
+        return 'Dark Forest';
+      case 3:
+        return 'Midnight';
+      default:
+        return 'Dark Purple';
+    }
+  }
+
+  void _showThemeSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.bgCard,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setModalState) => Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.borderLight,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Map Background Theme',
+                style: GoogleFonts.spaceMono(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Choose a theme for your level map',
+                style: GoogleFonts.inter(
+                    fontSize: 13, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  (0, 'Dark Purple', const Color(0xFF1A0A3E)),
+                  (1, 'Deep Ocean', const Color(0xFF071A2E)),
+                  (2, 'Dark Forest', const Color(0xFF071A0E)),
+                  (3, 'Midnight', const Color(0xFF000000)),
+                ].map((item) {
+                  final idx = item.$1;
+                  final name = item.$2;
+                  final swatchColor = item.$3;
+                  final isSelected = _currentThemeIndex == idx;
+                  return GestureDetector(
+                    onTap: () {
+                      setModalState(() {});
+                      _saveThemePref(idx);
+                      Navigator.pop(context);
+                    },
+                    child: Column(
+                      children: [
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          width: 60,
+                          height: 60,
+                          decoration: BoxDecoration(
+                            color: swatchColor,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: isSelected
+                                  ? AppColors.brand
+                                  : AppColors.border,
+                              width: isSelected ? 3 : 1.5,
+                            ),
+                            boxShadow: isSelected
+                                ? [
+                                    BoxShadow(
+                                      color: AppColors.brand.withValues(alpha: 0.4),
+                                      blurRadius: 12,
+                                    )
+                                  ]
+                                : null,
+                          ),
+                          child: isSelected
+                              ? const Icon(Icons.check,
+                                  color: Colors.white, size: 24)
+                              : null,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          name,
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: isSelected
+                                ? AppColors.brand
+                                : AppColors.textSecondary,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _loadApiKey() async {
@@ -155,6 +303,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     label: 'Weekly Summary',
                     value: _weeklySummary,
                     onChanged: (v) => setState(() => _weeklySummary = v),
+                  ),
+                ],
+              ),
+
+              // ── Appearance ──────────────────────────────
+              _Section(
+                title: 'Appearance',
+                children: [
+                  _TileItem(
+                    icon: Icons.palette_outlined,
+                    label: 'Map Theme',
+                    subtitle: _themeName(_currentThemeIndex),
+                    onTap: _showThemeSheet,
                   ),
                 ],
               ),
@@ -629,7 +790,7 @@ class _ToggleItem extends StatelessWidget {
           Switch(
             value: value,
             onChanged: onChanged,
-            activeColor: Colors.white,
+            activeThumbColor: Colors.white,
             activeTrackColor: AppColors.brand,
             inactiveThumbColor: AppColors.textMuted,
             inactiveTrackColor: AppColors.bgDark,

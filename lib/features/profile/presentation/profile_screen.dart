@@ -97,7 +97,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
 
     // Sort by time descending
     activities.sort((a, b) => b.time.compareTo(a.time));
-    final recentActivities = activities.take(6).toList();
+    final recentActivities = activities.take(5).toList();
 
     return Scaffold(
       backgroundColor: AppColors.bgDark,

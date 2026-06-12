@@ -12,8 +12,10 @@ import '../../../models/user_model.dart';
 import '../../../shared/providers/auth_provider.dart';
 import '../../../shared/providers/roadmap_provider.dart';
 import '../../../shared/providers/dashboard_provider.dart';
+import '../../../shared/providers/social_provider.dart';
 import '../../../shared/widgets/premium_animations.dart';
 import '../../../shared/widgets/loading_shimmer.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // ─── Daily XP: backed by SharedPreferences via todayXpProvider ──
 
@@ -28,8 +30,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(
-        () => ref.read(dashboardProvider.notifier).loadDashboard());
+    Future.microtask(() {
+      ref.read(dashboardProvider.notifier).loadDashboard();
+      ref.read(socialProvider.notifier).fetchSocialData();
+    });
   }
 
   @override
@@ -38,13 +42,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final dashboardState = ref.watch(dashboardProvider);
     final roadmaps = ref.watch(activeRoadmapsProvider);
     final dailyXp = ref.watch(todayXpProvider);
+    final socialState = ref.watch(socialProvider);
     final now = DateTime.now();
 
     return Scaffold(
       backgroundColor: AppColors.bgDark,
       body: RefreshIndicator(
-        onRefresh: () =>
-            ref.read(dashboardProvider.notifier).loadDashboard(),
+        onRefresh: () async {
+          await ref.read(dashboardProvider.notifier).loadDashboard();
+          await ref.read(socialProvider.notifier).fetchSocialData(forceRefresh: true);
+        },
         color: AppColors.brand,
         backgroundColor: AppColors.bgCard,
         child: CustomScrollView(
@@ -252,6 +259,20 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 child: _DailyGoalCard(dailyXpEarned: dailyXp)
                     .animate()
                     .fadeIn(delay: 320.ms),
+              ),
+            ),
+
+            // ── Friends Activity section ────────────────────────
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(AppSpacing.pagePadding,
+                    AppSpacing.xl, AppSpacing.pagePadding, 0),
+                child: _FriendsActivitySection(
+                  friends: socialState.friends,
+                  isLoading: socialState.isLoading,
+                )
+                    .animate()
+                    .fadeIn(delay: 360.ms),
               ),
             ),
 
@@ -1254,6 +1275,141 @@ class _ActivityDotGridState extends State<_ActivityDotGrid>
   }
 }
 
+// ─── Friends Activity Section ─────────────────────────────────────
+class _FriendsActivitySection extends StatelessWidget {
+  final List<MockFriend> friends;
+  final bool isLoading;
+
+  const _FriendsActivitySection({
+    required this.friends,
+    required this.isLoading,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Friends Activity',
+          style: GoogleFonts.spaceMono(
+            fontSize: 17,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textPrimary,
+            letterSpacing: 0.3,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.bgCard,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.border),
+          ),
+          padding: const EdgeInsets.all(16),
+          child: isLoading && friends.isEmpty
+              ? const Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 20),
+                    child: CircularProgressIndicator(color: AppColors.brand),
+                  ),
+                )
+              : friends.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 24),
+                        child: Column(
+                          children: [
+                            const Text('👥', style: TextStyle(fontSize: 32)),
+                            const SizedBox(height: 12),
+                            Text(
+                              'No friends yet. Add friends to see activity!',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                color: AppColors.textMuted,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: friends.length.clamp(0, 3), // show top 3 on dashboard
+                      separatorBuilder: (_, __) => const Divider(
+                        color: AppColors.border,
+                        height: 24,
+                      ),
+                      itemBuilder: (_, idx) {
+                        final friend = friends[idx];
+                        return Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 18,
+                              backgroundColor: friend.color.withValues(alpha: 0.15),
+                              child: Text(
+                                friend.name.isNotEmpty ? friend.name[0].toUpperCase() : '?',
+                                style: GoogleFonts.spaceMono(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: friend.color,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    friend.name,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    friend.status,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 12,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (friend.streak > 0) ...[
+                              const SizedBox(width: 8),
+                              Row(
+                                children: [
+                                  const Text('🔥 ', style: TextStyle(fontSize: 12)),
+                                  Text(
+                                    '${friend.streak}',
+                                    style: GoogleFonts.spaceGrotesk(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.coral,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
+                        );
+                      },
+                    ),
+        ),
+      ],
+    );
+  }
+}
+
 // ─── FIX 5: Daily Goal Card (animated ring, real data) ───────
 class _DailyGoalCard extends StatefulWidget {
   final int dailyXpEarned;
@@ -1268,14 +1424,15 @@ class _DailyGoalCardState extends State<_DailyGoalCard>
   late AnimationController _ctrl;
   late Animation<double> _progressAnim;
 
-  static const int kDailyGoal = 300;
+  int _dailyGoalTarget = 300;
 
   double get _rawProgress =>
-      (widget.dailyXpEarned / kDailyGoal).clamp(0.0, 1.0);
+      (widget.dailyXpEarned / _dailyGoalTarget).clamp(0.0, 1.0);
 
   @override
   void initState() {
     super.initState();
+    _loadDailyGoal();
     _ctrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
@@ -1284,6 +1441,21 @@ class _DailyGoalCardState extends State<_DailyGoalCard>
       CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic),
     );
     _ctrl.forward();
+  }
+
+  Future<void> _loadDailyGoal() async {
+    final prefs = await SharedPreferences.getInstance();
+    final target = prefs.getInt('daily_goal_target') ?? 300;
+    if (mounted) {
+      setState(() {
+        _dailyGoalTarget = target;
+        _progressAnim = Tween<double>(begin: _progressAnim.value, end: _rawProgress).animate(
+          CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic),
+        );
+      });
+      _ctrl.reset();
+      _ctrl.forward();
+    }
   }
 
   @override
@@ -1310,8 +1482,8 @@ class _DailyGoalCardState extends State<_DailyGoalCard>
   @override
   Widget build(BuildContext context) {
     final earned = widget.dailyXpEarned;
-    final remaining = (kDailyGoal - earned).clamp(0, kDailyGoal);
-    final isGoalReached = earned >= kDailyGoal;
+    final remaining = (_dailyGoalTarget - earned).clamp(0, _dailyGoalTarget);
+    final isGoalReached = earned >= _dailyGoalTarget;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -1381,7 +1553,7 @@ class _DailyGoalCardState extends State<_DailyGoalCard>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '$earned of $kDailyGoal XP earned today',
+                  '$earned of $_dailyGoalTarget XP earned today',
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     color: AppColors.textSecondary,

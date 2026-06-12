@@ -43,7 +43,7 @@ class LevelState {
 // ─────────────────────────────────────────────────────────────
 
 List<LevelModel> _mockLevels(String roadmapId) {
-  const _dsaTitles = [
+  const dsaTitles = [
     'Arrays & Slicing', 'Two Pointers', 'Sliding Window', 'Binary Search',
     'Linked Lists', 'Stacks & Queues', 'Trees — Basics', 'BFS & DFS',
     'Heaps & Priority Queues', 'Tries', 'Dynamic Programming I',
@@ -53,7 +53,7 @@ List<LevelModel> _mockLevels(String roadmapId) {
     'Segment Trees', 'Monotonic Stack', 'Matrix Problems', 'Intervals',
     'Math & Number Theory', 'String Algorithms', 'Final Challenge',
   ];
-  const _gymTitles = [
+  const gymTitles = [
     'Mobility Warmup', 'Push Day I', 'Pull Day I', 'Leg Day I',
     'Core & Abs', 'Push Day II', 'Pull Day II', 'Leg Day II',
     'Cardio HIIT', 'Strength Test', 'Upper Body Superset',
@@ -68,7 +68,7 @@ List<LevelModel> _mockLevels(String roadmapId) {
     'Peak Week Prep', 'Transformation Test', 'Graduation Day',
     'Celebration Workout', 'Recovery & Reflection',
   ];
-  const _systemTitles = [
+  const systemTitles = [
     'Scalability Basics', 'Load Balancing', 'Caching Strategies',
     'SQL vs NoSQL', 'CAP Theorem', 'Consistent Hashing',
     'Message Queues', 'API Design', 'Rate Limiting',
@@ -79,10 +79,10 @@ List<LevelModel> _mockLevels(String roadmapId) {
   ];
 
   final titles = roadmapId.contains('001')
-      ? _dsaTitles
+      ? dsaTitles
       : roadmapId.contains('002')
-          ? _gymTitles
-          : _systemTitles;
+          ? gymTitles
+          : systemTitles;
 
   const proofTypes = ['quiz', 'voice', 'quiz', 'photo', 'quiz'];
   final completedCount = roadmapId.contains('001')
@@ -116,6 +116,54 @@ List<LevelModel> _mockLevels(String roadmapId) {
   });
 }
 
+/// Mock levels with sub-levels for demonstration (roadmap id contains 'sub')
+List<LevelModel> _mockSubLevels(String roadmapId) {
+  final topics = [
+    ('Arrays', ['Two Pointer', 'Sliding Window', 'Prefix Sum', 'Kadane\'s Algorithm']),
+    ('Linked Lists', ['Reversal', 'Cycle Detection', 'Merge Sorted', 'Remove N-th Node']),
+    ('Trees', ['Inorder Traversal', 'Level BFS', 'Lowest Common Ancestor', 'Path Sum']),
+    ('Graphs', ['DFS Traversal', 'BFS Traversal', 'Topological Sort', 'Union Find']),
+    ('Dynamic Programming', ['Fibonacci', 'Knapsack 0/1', 'LCS', 'Coin Change']),
+    ('Sorting & Searching', ['Merge Sort', 'Quick Sort', 'Binary Search', 'Counting Sort']),
+  ];
+
+  return List.generate(topics.length, (i) {
+    final (topic, subs) = topics[i];
+    final isCompleted = i < 2;
+    final isActive = i == 2;
+    final levelId = '$roadmapId-level-${i + 1}';
+    final subLevelList = subs.asMap().entries.map((e) {
+      final subIsCompleted = isCompleted || (isActive && e.key < 2);
+      return SubLevel(
+        id: '$levelId-sub-${e.key}',
+        parentLevelId: levelId,
+        title: e.value,
+        description: 'Learn and practice ${e.value} technique.',
+        proofType: 'quiz',
+        isCompleted: subIsCompleted,
+        orderIndex: e.key,
+      );
+    }).toList();
+    return LevelModel(
+      id: levelId,
+      roadmapId: roadmapId,
+      levelNumber: i + 1,
+      title: topic,
+      description: 'Master $topic and all its sub-techniques.',
+      proofType: 'quiz',
+      estimatedMinutes: 60,
+      isLocked: !isCompleted && !isActive,
+      isCompleted: isCompleted,
+      xpReward: 200,
+      completedAt: isCompleted
+          ? DateTime.now().subtract(Duration(days: topics.length - i))
+          : null,
+      topics: subs,
+      subLevels: subLevelList,
+    );
+  });
+}
+
 // ─────────────────────────────────────────────────────────────
 // Notifier
 // ─────────────────────────────────────────────────────────────
@@ -138,8 +186,14 @@ class LevelNotifier extends StateNotifier<LevelState> {
 
     if (_isMockMode) {
       await Future.delayed(const Duration(milliseconds: 500));
+      // Detect if this roadmap is a sublevel demo roadmap
+      final roadmaps = ref.read(roadmapProvider).roadmaps;
+      final roadmap = roadmaps.where((r) => r.id == roadmapId).firstOrNull;
+      final levels = (roadmap?.hasSubLevels ?? false)
+          ? _mockSubLevels(roadmapId)
+          : _mockLevels(roadmapId);
       state = state.copyWith(
-        levels: _mockLevels(roadmapId),
+        levels: levels,
         isLoading: false,
         hasLoaded: true,
       );
@@ -177,6 +231,42 @@ class LevelNotifier extends StateNotifier<LevelState> {
     state = state.copyWith(levels: updated);
   }
 
+  /// Mark a specific sub-level as complete. If ALL sub-levels complete,
+  /// mark the parent as complete and unlock the next level.
+  void markSubLevelComplete(String parentLevelId, String subLevelId) {
+    final updated = state.levels.map((level) {
+      if (level.id != parentLevelId) return level;
+
+      final newSubLevels = level.subLevels.map((sub) {
+        if (sub.id == subLevelId) {
+          return sub.copyWith(isCompleted: true, completedAt: DateTime.now());
+        }
+        return sub;
+      }).toList();
+
+      final allSubsDone = newSubLevels.every((s) => s.isCompleted);
+      return level.copyWith(
+        subLevels: newSubLevels,
+        isCompleted: allSubsDone,
+        completedAt: allSubsDone ? DateTime.now() : level.completedAt,
+      );
+    }).toList();
+
+    // If parent is now complete, unlock next level
+    final parentLevel =
+        updated.where((l) => l.id == parentLevelId).firstOrNull;
+    final finalList = parentLevel?.isCompleted == true
+        ? updated.map((l) {
+            if (l.levelNumber == (parentLevel!.levelNumber + 1)) {
+              return l.copyWith(isLocked: false);
+            }
+            return l;
+          }).toList()
+        : updated;
+
+    state = state.copyWith(levels: finalList);
+  }
+
   Future<bool> verifyAndCompleteLevel({
     required String levelId,
     required String proofType,
@@ -184,11 +274,37 @@ class LevelNotifier extends StateNotifier<LevelState> {
     Map<String, dynamic>? proofData,
     int timeSpentMinutes = 0,
   }) async {
-    // Optimistic update
+    // ── Handle sub-level composite IDs: "parentId__sub__subId" ──
+    if (levelId.contains('__sub__')) {
+      final parts = levelId.split('__sub__');
+      final parentId = parts[0];
+      final subId = parts[1];
+      markSubLevelComplete(parentId, subId);
+
+      if (_isMockMode) {
+        final parent = state.levels.where((l) => l.id == parentId).firstOrNull;
+        if (parent != null) {
+          final xpGain = parent.xpReward ~/ parent.subLevels.length;
+          final user = ref.read(currentUserProvider);
+          if (user != null) {
+            final updatedXp = user.xpTotal + xpGain;
+            ref.read(authProvider.notifier).updateLocalUser(user.copyWith(
+              xpTotal: updatedXp,
+              level: updatedXp ~/ 500 + 1,
+            ));
+            ref.read(todayXpProvider.notifier).addXp(xpGain);
+          }
+        }
+        return true;
+      }
+      // TODO: real API call for sub-level completion
+      return true;
+    }
+
+    // ── Standard level completion ─────────────────────────────
     markComplete(levelId);
 
     if (_isMockMode) {
-      // Mock mode: update local XP in mock user
       final user = ref.read(currentUserProvider);
       if (user != null) {
         final targetLvl = state.levels.firstWhere(
@@ -200,7 +316,6 @@ class LevelNotifier extends StateNotifier<LevelState> {
           xpTotal: updatedXp,
           level: updatedXp ~/ 500 + 1,
         ));
-        // Persist daily XP
         ref.read(todayXpProvider.notifier).addXp(targetLvl.xpReward);
       }
       return true;
@@ -218,13 +333,11 @@ class LevelNotifier extends StateNotifier<LevelState> {
         },
       );
       if (response.statusCode == 200) {
-        // Persist daily XP earned
         final completedLvl = state.levels.firstWhere(
           (l) => l.id == levelId,
           orElse: () => state.levels.first,
         );
         ref.read(todayXpProvider.notifier).addXp(completedLvl.xpReward);
-        // Refresh user profile details & roadmaps list to sync XP & levels
         await ref.read(authProvider.notifier).getMe();
         await ref.read(roadmapProvider.notifier).fetchRoadmaps(forceRefresh: true);
         return true;
@@ -253,9 +366,44 @@ final levelProvider = StateNotifierProvider.family<LevelNotifier, LevelState, St
   (ref, roadmapId) => LevelNotifier(roadmapId, ref),
 );
 
-/// Get a single level by ID across all loaded roadmaps
+/// Get a single level by ID across all loaded roadmaps.
+/// Also resolves composite sub-level IDs: "parentId__sub__subId"
 final levelByIdProvider = Provider.family<LevelModel?, String>((ref, levelId) {
-  // Search all dynamic roadmaps loaded in roadmapProvider
+  // ── Sub-level composite ID resolution ──────────────────────
+  if (levelId.contains('__sub__')) {
+    final parts = levelId.split('__sub__');
+    final parentId = parts[0];
+    final subId = parts[1];
+
+    // Find the parent level across all roadmaps
+    final roadmaps = ref.watch(roadmapProvider).roadmaps;
+    for (final r in roadmaps) {
+      final s = ref.watch(levelProvider(r.id));
+      try {
+        final parent = s.levels.firstWhere((l) => l.id == parentId);
+        final sub = parent.subLevels.firstWhere((sl) => sl.id == subId);
+        // Construct a transient LevelModel representing this sub-level
+        return LevelModel(
+          id: sub.compositeId,
+          roadmapId: parent.roadmapId,
+          levelNumber: parent.levelNumber,
+          title: sub.title,
+          description: sub.description,
+          proofType: sub.proofType,
+          estimatedMinutes: parent.estimatedMinutes ~/ parent.subLevels.length,
+          isLocked: !sub.isCompleted && parent.isLocked,
+          isCompleted: sub.isCompleted,
+          xpReward: parent.xpReward ~/ parent.subLevels.length,
+          completedAt: sub.completedAt,
+        );
+      } catch (_) {
+        // not here
+      }
+    }
+    return null;
+  }
+
+  // ── Standard level ID lookup ────────────────────────────────
   final roadmaps = ref.watch(roadmapProvider).roadmaps;
   for (final r in roadmaps) {
     final s = ref.watch(levelProvider(r.id));
@@ -271,6 +419,7 @@ final levelByIdProvider = Provider.family<LevelModel?, String>((ref, levelId) {
     'mock-roadmap-001',
     'mock-roadmap-002',
     'mock-roadmap-003',
+    'mock-roadmap-sub-001',
   ];
   for (final rId in roadmapIds) {
     final s = ref.watch(levelProvider(rId));
