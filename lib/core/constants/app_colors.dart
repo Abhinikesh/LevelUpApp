@@ -1,80 +1,109 @@
 import 'package:flutter/material.dart';
+import '../theme/app_themes.dart';
+
+class DynamicColor extends Color {
+  final int Function() getter;
+  const DynamicColor(this.getter) : super(0);
+
+  @override
+  int get value => getter();
+}
+
+int _brandVal() => AppColors.currentTheme.primary.value;
+int _coralVal() => AppColors.currentTheme.secondary.value;
+int _greenVal() => AppColors.currentTheme.accent.value;
+int _tealVal() => AppColors.currentTheme.accent.value;
+int _infoVal() => AppColors.currentTheme.primary.value;
+
+int _bgDarkVal() => AppColors.isDark ? 0xFF080810 : 0xFFF5F5FA;
+int _bgCardVal() => AppColors.isDark ? 0xFF0F0F1A : 0xFFFFFFFF;
+int _bgCardLightVal() => AppColors.isDark ? 0xFF161625 : 0xFFF0F0F5;
+int _borderVal() => AppColors.isDark ? 0xFF1C1C2E : 0xFFE0E0EB;
+int _borderLightVal() => AppColors.isDark ? 0xFF252538 : 0xFFE5E5F0;
+
+int _textPrimaryVal() => AppColors.isDark ? 0xFFF5F5FF : 0xFF1A1A2E;
+int _textSecondaryVal() => AppColors.isDark ? 0xFF9898B8 : 0xFF6B6B8A;
+int _textMutedVal() => AppColors.isDark ? 0xFF55557A : 0xFFAAAABF;
 
 class AppColors {
   AppColors._();
 
+  // Dynamic state loaded from providers
+  static AppTheme currentTheme = appThemes[0];
+  static bool isDark = true;
+
   // Brand Colors
-  static const Color brand = Color(0xFF7B6EF6);       // Brand purple
-  static const Color coral = Color(0xFFFF5E7D);       // Brand coral
-  static const Color green = Color(0xFF00E5A0);       // Brand green
-  static const Color yellow = Color(0xFFFFB300);      // Gold / Yellow
-  static const Color gold = Color(0xFFFFB300);        // Gold
-  static const Color teal = Color(0xFF00E5A0);        // Map to brand green
+  static const Color brand = DynamicColor(_brandVal);       // Brand purple
+  static const Color coral = DynamicColor(_coralVal);       // Brand coral
+  static const Color green = DynamicColor(_greenVal);       // Brand green
+  static const Color yellow = Color(0xFFFFB300);            // Gold / Yellow
+  static const Color gold = Color(0xFFFFB300);              // Gold
+  static const Color teal = DynamicColor(_tealVal);         // Map to brand green
 
   // Background Colors
-  static const Color bgDark = Color(0xFF080810);      // Background (darkest)
-  static const Color bgCard = Color(0xFF0F0F1A);      // Surface (cards)
-  static const Color bgCardLight = Color(0xFF161625); // Surface elevated
-  static const Color border = Color(0xFF1C1C2E);       // Border subtle
-  static const Color borderLight = Color(0xFF252538);  // Border bright
+  static const Color bgDark = DynamicColor(_bgDarkVal);      // Background (darkest)
+  static const Color bgCard = DynamicColor(_bgCardVal);      // Surface (cards)
+  static const Color bgCardLight = DynamicColor(_bgCardLightVal); // Surface elevated
+  static const Color border = DynamicColor(_borderVal);       // Border subtle
+  static const Color borderLight = DynamicColor(_borderLightVal);  // Border bright
 
   // Text Colors
-  static const Color textPrimary = Color(0xFFF5F5FF);
-  static const Color textSecondary = Color(0xFF9898B8);
-  static const Color textMuted = Color(0xFF55557A);
+  static const Color textPrimary = DynamicColor(_textPrimaryVal);
+  static const Color textSecondary = DynamicColor(_textSecondaryVal);
+  static const Color textMuted = DynamicColor(_textMutedVal);
 
   // Status Colors
   static const Color success = Color(0xFF00E5A0);
   static const Color warning = Color(0xFFFFB300);
   static const Color error = Color(0xFFFF5E7D);
-  static const Color info = Color(0xFF7B6EF6);
+  static const Color info = DynamicColor(_infoVal);
 
   // Overlay
   static const Color overlay = Color(0x80000000);
-  static const Color glowBrand = Color(0x337B6EF6);
-  static const Color glowCoral = Color(0x33FF5E7D);
-  static const Color glowGreen = Color(0x3300E5A0);
-  static const Color glowGold = Color(0x33FFB300);
+  static Color get glowBrand => brand.withValues(alpha: 0.2);
+  static Color get glowCoral => coral.withValues(alpha: 0.2);
+  static Color get glowGreen => green.withValues(alpha: 0.2);
+  static Color get glowGold => gold.withValues(alpha: 0.2);
 
   // Gradients
-  static const LinearGradient brandGradient = LinearGradient(
-    colors: [Color(0xFF7B6EF6), Color(0xFFFF5E7D)],
+  static LinearGradient get brandGradient => LinearGradient(
+    colors: [brand, coral],
     begin: Alignment.centerLeft,
     end: Alignment.centerRight,
   );
 
-  static const LinearGradient greenGradient = LinearGradient(
-    colors: [Color(0xFF00E5A0), Color(0xFF00C788)],
+  static LinearGradient get greenGradient => LinearGradient(
+    colors: [green, green.withValues(alpha: 0.8)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  static const LinearGradient goldGradient = LinearGradient(
-    colors: [Color(0xFFFFB300), Color(0xFFFF8C00)],
+  static LinearGradient get goldGradient => LinearGradient(
+    colors: [gold, gold.withValues(alpha: 0.8)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  static const LinearGradient darkGradient = LinearGradient(
-    colors: [Color(0xFF0F0F1A), Color(0xFF080810)],
+  static LinearGradient get darkGradient => LinearGradient(
+    colors: [bgCard, bgDark],
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
   );
 
-  static const LinearGradient purpleGradient = LinearGradient(
-    colors: [Color(0xFF7B6EF6), Color(0xFF9F93FF)],
+  static LinearGradient get purpleGradient => LinearGradient(
+    colors: [brand, brand.withValues(alpha: 0.7)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  static const LinearGradient fireGradient = LinearGradient(
-    colors: [Color(0xFFFF8C00), Color(0xFFFF5E7D)],
+  static LinearGradient get fireGradient => LinearGradient(
+    colors: [const Color(0xFFFF8C00), coral],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  static const LinearGradient dangerGradient = LinearGradient(
-    colors: [Color(0xFFFF5E7D), Color(0xFFE53E3E)],
+  static LinearGradient get dangerGradient => LinearGradient(
+    colors: [coral, const Color(0xFFFF3E3E)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );

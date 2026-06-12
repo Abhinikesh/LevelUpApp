@@ -1,6 +1,35 @@
+import 'package:shared_preferences/shared_preferences.dart';
+
 class ApiConstants {
-  static const String baseUrl = "http://10.66.71.97:8000/api";
-  static const String wsUrl = "ws://localhost:8000";
+  static String baseUrl = "http://10.66.71.97:8000/api";
+  static String wsUrl = "ws://localhost:8000";
+
+  static Future<void> init() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedUrl = prefs.getString('custom_api_base_url');
+      final isDemoMode = prefs.getBool('is_demo_mode') ?? false; // Defaults to Demo Mode
+
+      if (isDemoMode) {
+        baseUrl = "";
+      } else if (savedUrl != null) {
+        baseUrl = savedUrl;
+      } else {
+        baseUrl = "http://10.66.71.97:8000/api";
+      }
+
+      if (baseUrl.isNotEmpty) {
+        final uri = Uri.tryParse(baseUrl);
+        if (uri != null) {
+          final host = uri.host;
+          final port = uri.port;
+          wsUrl = "ws://$host:$port";
+        }
+      } else {
+        wsUrl = "ws://localhost:8000";
+      }
+    } catch (_) {}
+  }
   static const int connectTimeoutMs = 30000;
   static const int receiveTimeoutMs = 60000;
   static const int sendTimeoutMs = 30000;
@@ -9,6 +38,7 @@ class ApiConstants {
   static const String tokenPrefix = "Bearer";
   static const String login = "/auth/login";
   static const String register = "/auth/register";
+  static const String googleLogin = "/auth/google";
   static const String me = "/auth/me";
   static const String logout = "/auth/logout";
   static const String refreshToken = "/auth/refresh";

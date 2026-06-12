@@ -1,0 +1,91 @@
+<USER_REQUEST>
+You are a senior full-stack developer with 50 years of experience.
+Fix STEPUP app (Flutter frontend + Node.js/Express/MongoDB backend).
+
+================================================================
+PART A — APP-WIDE THEME COLOR SYSTEM
+================================================================
+
+Create a complete theme color system that changes the ENTIRE app's 
+accent colors (buttons, gradients, active states, icons, progress 
+bars, badges) - NOT background colors, only accent/brand colors.
+
+Create file: lib/core/theme/app_themes.dart
+
+class AppTheme {
+  final String id;
+  final String name;
+  final Color primary;
+  final Color secondary;
+  final Color accent;
+  
+  const AppTheme({
+    required this.id, required this.name,
+    required this.primary, required this.secondary, required this.accent,
+  });
+}
+
+const List<AppTheme> appThemes = [
+  AppTheme(id: 'default', name: 'Cosmic Purple',
+    primary: Color(0xFF7B6EF6), secondary: Color(0xFFFF5E7D), accent: Color(0xFF00E5A0)),
+  AppTheme(id: 'forest', name: 'Forest Green',
+    primary: Color(0xFF2ECC71), secondary: Color(0xFF27AE60), accent: Color(0xFFA8E063)),
+  AppTheme(id: 'ocean', name: 'Ocean Blue',
+    primary: Color(0xFF2E86FF), secondary: Color(0xFF00C6FF), accent: Color(0xFF72EDF2)),
+  AppTheme(id: 'sunset', name: 'Sunset Orange',
+    primary: Color(0xFFFF7E29), secondary: Color(0xFFFFB300), accent: Color(0xFFFF5E62)),
+  AppTheme(id: 'rose', name: 'Rose Pink',
+    primary: Color(0xFFFF5C8A), secondary: Color(0xFFFF8FAB), accent: Color(0xFFFFC2D1)),
+  AppTheme(id: 'sky', name: 'Sky Blue',
+    primary: Color(0xFF4FACFE), secondary: Color(0xFF00F2FE), accent: Color(0xFFA1C4FD)),
+  AppTheme(id: 'royal', name: 'Royal Gold',
+    primary: Color(0xFFFFD700), secondary: Color(0xFFFFA500), accent: Color(0xFFFFE066)),
+  AppTheme(id: 'mono', name: 'Slate Gray',
+    primary: Color(0xFF8E9AAF), secondary: Color(0xFFCBC0D3), accent: Color(0xFFEFD3D7)),
+];
+
+Create a Riverpod provider: themeProvider (StateNotifier)
+- Loads selected theme id from S
+<truncated 5805 bytes>
+was yesterday, 
+     streak += 1; if lastActiveDate was today, no change; 
+     if older, streak = 1. Update lastActiveDate = today.
+   - Check badge unlock conditions, create Activity if badge earned
+
+5. Run: node server.js and confirm "✅ MongoDB Connected" appears
+   and server starts on configured PORT without errors.
+
+================================================================
+PART F — GOOGLE SIGN-IN (BACKEND)
+================================================================
+
+In stepup-server, install: npm install google-auth-library
+
+Create POST /api/auth/google route:
+  Receives: { idToken: string } from Flutter app
+  Verify token using google-auth-library with GOOGLE_CLIENT_ID
+  Extract email, name, picture from verified token
+  Find user by email in MongoDB:
+    If exists: log them in, return JWT
+    If not exists: create new user with email, name, avatar=picture,
+      xp=0, level=1, streak=0, no password (or random hash), 
+      authProvider='google'
+  Return: { token: JWT, user: {...} }
+
+Write ALL code completely. Test backend with: node server.js
+Confirm MongoDB connects successfully before moving to next prompt.
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-06-12T16:05:16+05:30.
+
+The user's current state is as follows:
+Active Document: /Users/abhinikesh/Documents/Projects/stepupapp/lib/features/auth/presentation/login_screen.dart (LANGUAGE_DART)
+Cursor is on line: 1
+Other open documents:
+- /Users/abhinikesh/Documents/Projects/stepupapp/lib/core/constants/api_constants.dart (LANGUAGE_DART)
+- /Users/abhinikesh/Documents/Projects/stepupapp/lib/features/auth/presentation/login_screen.dart (LANGUAGE_DART)
+- /Users/abhinikesh/Documents/Projects/stepupapp/lib/features/home/presentation/dashboard_screen.dart (LANGUAGE_DART)
+Running terminal commands:
+- flutter run -d chrome             (in /Users/abhinikesh/Documents/Projects/stepupapp, running for 4h37m53s)
+- flutter run -d chrome (in /Users/abhinikesh/Documents/Projects/stepupapp, running for 4h21m27s)
+</ADDITIONAL_METADATA>

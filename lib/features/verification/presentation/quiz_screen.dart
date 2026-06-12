@@ -288,7 +288,7 @@ class _IntroView extends StatelessWidget {
           // Icon
           Container(
             width: 96, height: 96,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               gradient: AppColors.brandGradient, shape: BoxShape.circle,
             ),
             child: const Icon(Icons.quiz_outlined, color: Colors.white, size: 44),

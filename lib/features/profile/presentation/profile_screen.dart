@@ -198,7 +198,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                 child: Container(
                                   width: 80,
                                   height: 80,
-                                  decoration: const BoxDecoration(
+                                  decoration: BoxDecoration(
                                     shape: BoxShape.circle,
                                     gradient: AppColors.darkGradient,
                                   ),

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/network/dio_client.dart';
+import '../../core/storage/local_database.dart';
 import '../../models/level_model.dart';
 import 'auth_provider.dart';
 import 'dashboard_provider.dart';
@@ -186,6 +187,17 @@ class LevelNotifier extends StateNotifier<LevelState> {
 
     if (_isMockMode) {
       await Future.delayed(const Duration(milliseconds: 500));
+      
+      final localLevels = await LocalDatabase.getLevels(roadmapId);
+      if (localLevels.isNotEmpty) {
+        state = state.copyWith(
+          levels: localLevels,
+          isLoading: false,
+          hasLoaded: true,
+        );
+        return;
+      }
+
       // Detect if this roadmap is a sublevel demo roadmap
       final roadmaps = ref.read(roadmapProvider).roadmaps;
       final roadmap = roadmaps.where((r) => r.id == roadmapId).firstOrNull;
@@ -229,6 +241,9 @@ class LevelNotifier extends StateNotifier<LevelState> {
       return l;
     }).toList();
     state = state.copyWith(levels: updated);
+    if (_isMockMode) {
+      LocalDatabase.saveLevels(updated);
+    }
   }
 
   /// Mark a specific sub-level as complete. If ALL sub-levels complete,
@@ -265,6 +280,9 @@ class LevelNotifier extends StateNotifier<LevelState> {
         : updated;
 
     state = state.copyWith(levels: finalList);
+    if (_isMockMode) {
+      LocalDatabase.saveLevels(finalList);
+    }
   }
 
   Future<bool> verifyAndCompleteLevel({

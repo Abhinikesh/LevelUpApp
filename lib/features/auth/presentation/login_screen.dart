@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
+import '../../../core/constants/api_constants.dart';
+import '../../../core/network/dio_client.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/utils/validators.dart';
 import '../../../shared/providers/auth_provider.dart';
@@ -195,6 +197,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
+  void _showServerSettingsModal() {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => const ServerSettingsDialog(),
+    );
+  }
+
   Widget _buildStepRow(String num, String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10.0),
@@ -313,6 +323,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
                 child: const Icon(Icons.arrow_back_ios_new,
                     color: AppColors.textPrimary, size: 16),
+              ),
+            ),
+          ),
+
+          // ── Server Settings Button ─────────────────────────
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 8,
+            right: AppSpacing.base,
+            child: IconButton(
+              onPressed: _showServerSettingsModal,
+              icon: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.bgCard.withValues(alpha: 0.8),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: const Icon(Icons.dns_outlined,
+                    color: AppColors.textPrimary, size: 18),
               ),
             ),
           ),
@@ -651,6 +681,308 @@ class _GoogleButton extends StatelessWidget {
                 style: GoogleFonts.inter(
                     fontSize: 15, fontWeight: FontWeight.w600,
                     color: const Color(0xFF1A1A1A))),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class ServerSettingsDialog extends StatefulWidget {
+  const ServerSettingsDialog({super.key});
+
+  @override
+  State<ServerSettingsDialog> createState() => _ServerSettingsDialogState();
+}
+
+class _ServerSettingsDialogState extends State<ServerSettingsDialog> {
+  final _urlCtrl = TextEditingController();
+  bool _isDemoMode = true;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCurrentSettings();
+  }
+
+  Future<void> _loadCurrentSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _isDemoMode = prefs.getBool('is_demo_mode') ?? true;
+      _urlCtrl.text = prefs.getString('custom_api_base_url') ?? "http://10.66.71.97:8000/api";
+    });
+  }
+
+  @override
+  void dispose() {
+    _urlCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('is_demo_mode', _isDemoMode);
+      
+      String finalUrl = _urlCtrl.text.trim();
+      if (finalUrl.isNotEmpty) {
+        await prefs.setString('custom_api_base_url', finalUrl);
+      }
+      
+      // Update constants at runtime
+      if (_isDemoMode) {
+        ApiConstants.baseUrl = "";
+      } else {
+        ApiConstants.baseUrl = finalUrl;
+      }
+      
+      // Update WS Url
+      if (ApiConstants.baseUrl.isNotEmpty) {
+        final uri = Uri.tryParse(ApiConstants.baseUrl);
+        if (uri != null) {
+          final host = uri.host;
+          final port = uri.port;
+          ApiConstants.wsUrl = "ws://$host:$port";
+        }
+      } else {
+        ApiConstants.wsUrl = "ws://localhost:8000";
+      }
+
+      // Reset Dio Client to pick up the new base URL
+      DioClient.reset();
+
+      if (mounted) {
+        Navigator.pop(context, true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.bgCard,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              side: const BorderSide(color: AppColors.green),
+            ),
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_outline, color: AppColors.green, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _isDemoMode 
+                        ? 'Switched to Demo Mode (Mock Data)' 
+                        : 'Server API URL updated successfully!',
+                    style: GoogleFonts.inter(fontSize: 13, color: AppColors.textPrimary),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.bgCard,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              side: const BorderSide(color: AppColors.error),
+            ),
+            content: Text('Failed to save server settings', style: GoogleFonts.inter(color: AppColors.textPrimary)),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: AppColors.bgCard,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: const BorderSide(color: AppColors.border),
+      ),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 460),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.brand.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.dns_outlined, color: AppColors.brand, size: 24),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Server Connection',
+                  style: GoogleFonts.syne(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Text(
+              'Select whether to use local simulated demo data (Mock Mode) or connect to a running backend server.',
+              style: GoogleFonts.inter(
+                fontSize: 13.5,
+                color: AppColors.textSecondary,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 20),
+            
+            // Switch for Demo Mode
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.bgDark.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.cloud_queue, color: AppColors.textSecondary),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Demo Mode (Mock Data)',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        Text(
+                          'Run without internet/backend',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: AppColors.textMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch.adaptive(
+                    value: _isDemoMode,
+                    activeThumbColor: AppColors.brand,
+                    activeTrackColor: AppColors.brand.withValues(alpha: 0.5),
+                    onChanged: (val) {
+                      setState(() {
+                        _isDemoMode = val;
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ),
+            
+            if (!_isDemoMode) ...[
+              const SizedBox(height: 18),
+              Text(
+                'API Base URL',
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _urlCtrl,
+                style: GoogleFonts.inter(color: AppColors.textPrimary, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: 'http://localhost:8000/api',
+                  hintStyle: GoogleFonts.inter(color: AppColors.textMuted),
+                  filled: true,
+                  fillColor: AppColors.bgDark.withValues(alpha: 0.3),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppColors.brand),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Note: Ensure your local backend is running and CORS is enabled to allow Chrome connections.',
+                style: GoogleFonts.inter(
+                  fontSize: 11.5,
+                  color: AppColors.coral,
+                  height: 1.3,
+                ),
+              ),
+            ],
+            
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: _saving ? null : () => Navigator.pop(context),
+                  child: Text(
+                    'Cancel',
+                    style: GoogleFonts.inter(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                BounceOnTap(
+                  onTap: _saving ? null : _save,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    decoration: BoxDecoration(
+                      gradient: AppColors.brandGradient,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: _saving
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : Text(
+                            'Save & Connect',
+                            style: GoogleFonts.syne(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
+                          ),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),

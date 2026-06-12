@@ -820,7 +820,12 @@ Rules:
           // ── Manual Tab ─────────────────────────────────────────
           SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.all(AppSpacing.pagePadding),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.pagePadding,
+              AppSpacing.pagePadding,
+              AppSpacing.pagePadding,
+              140,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -978,7 +983,12 @@ Rules:
 
           // ── AI Generate Tab ────────────────────────────────────
           SingleChildScrollView(
-            padding: const EdgeInsets.all(AppSpacing.pagePadding),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.pagePadding,
+              AppSpacing.pagePadding,
+              AppSpacing.pagePadding,
+              140,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

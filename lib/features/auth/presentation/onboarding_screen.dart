@@ -454,7 +454,7 @@ class _VerificationIllustration extends StatelessWidget {
             child: Container(
               width: 48,
               height: 48,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: AppColors.greenGradient,
                 boxShadow: [BoxShadow(color: AppColors.glowGreen, blurRadius: 12)],

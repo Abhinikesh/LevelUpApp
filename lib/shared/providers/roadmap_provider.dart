@@ -7,6 +7,7 @@ import '../../core/network/api_interceptors.dart';
 import '../../core/network/dio_client.dart';
 import '../../core/storage/local_database.dart';
 import '../../models/roadmap_model.dart';
+import '../../models/level_model.dart';
 
 // ─── Mock roadmaps for demo/debug mode ───────────────────────
 final _mockRoadmaps = [
@@ -223,6 +224,61 @@ class RoadmapNotifier extends StateNotifier<RoadmapState> {
   // ── Create roadmap (optimistic) ───────────────────────────────
 
   Future<RoadmapModel?> createRoadmap(Map<String, dynamic> payload) async {
+    if (_isMockMode) {
+      state = state.copyWith(isLoading: true, error: null);
+      await Future.delayed(const Duration(milliseconds: 800));
+      final newId = 'mock-roadmap-${DateTime.now().millisecondsSinceEpoch}';
+      
+      final levelsPayload = payload['levels'] as List? ?? [];
+      final List<LevelModel> levels = [];
+      for (int i = 0; i < levelsPayload.length; i++) {
+        final lvl = levelsPayload[i] as Map<String, dynamic>;
+        levels.add(LevelModel(
+          id: '$newId-level-${i + 1}',
+          roadmapId: newId,
+          levelNumber: lvl['levelNumber'] as int? ?? (i + 1),
+          title: lvl['title'] as String? ?? 'Level ${i + 1}',
+          description: lvl['description'] as String? ?? 'Master this level by completing the verification.',
+          proofType: lvl['proofType'] as String? ?? 'quiz',
+          estimatedMinutes: lvl['estimatedMinutes'] as int? ?? 45,
+          isLocked: i > 0, // Unlock first level
+          isCompleted: false,
+          xpReward: lvl['xpReward'] as int? ?? 100,
+          topics: (lvl['topics'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+        ));
+      }
+
+      final roadmap = RoadmapModel(
+        id: newId,
+        userId: 'mock-user-123',
+        title: payload['title'] as String? ?? 'New Roadmap',
+        description: payload['description'] as String? ?? '',
+        type: payload['type'] as String? ?? 'custom',
+        source: payload['source'] as String? ?? 'manual',
+        totalLevels: levels.isNotEmpty ? levels.length : 1,
+        currentLevel: 1,
+        createdAt: DateTime.now(),
+        coverEmoji: payload['coverEmoji'] as String?,
+        totalXpReward: levels.fold<int>(0, (sum, item) => sum + item.xpReward),
+        xpEarned: 0,
+        mapStyle: payload['mapStyle'] as String? ?? 'simple',
+      );
+
+      await LocalDatabase.saveRoadmap(roadmap);
+      if (levels.isNotEmpty) {
+        await LocalDatabase.saveLevels(levels);
+      }
+
+      final newList = [roadmap, ...state.roadmaps];
+      unawaited(_writeToPrefsCache(newList));
+
+      state = state.copyWith(
+        roadmaps: newList,
+        isLoading: false,
+      );
+      return roadmap;
+    }
+
     // ── Optimistic insert: build a temporary placeholder ─────────
     final tempId = 'temp-${DateTime.now().millisecondsSinceEpoch}';
     final optimisticRoadmap = RoadmapModel(
@@ -293,6 +349,15 @@ class RoadmapNotifier extends StateNotifier<RoadmapState> {
   // ── Delete roadmap ────────────────────────────────────────────
 
   Future<bool> deleteRoadmap(String id) async {
+    if (_isMockMode) {
+      await Future.delayed(const Duration(milliseconds: 300));
+      await LocalDatabase.deleteRoadmap(id);
+      final updated = state.roadmaps.where((r) => r.id != id).toList();
+      state = state.copyWith(roadmaps: updated);
+      unawaited(_writeToPrefsCache(updated));
+      return true;
+    }
+
     try {
       await _dio.delete(ApiConstants.roadmapById(id));
       await LocalDatabase.deleteRoadmap(id);

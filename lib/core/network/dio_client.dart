@@ -17,7 +17,7 @@ class DioClient {
   static Dio _createDio() {
     final dio = Dio(
       BaseOptions(
-        baseUrl: ApiConstants.baseUrl,
+        baseUrl: ApiConstants.baseUrl.isNotEmpty ? ApiConstants.baseUrl : "http://10.66.71.97:8000/api",
         connectTimeout:
             const Duration(milliseconds: ApiConstants.connectTimeoutMs),
         receiveTimeout:

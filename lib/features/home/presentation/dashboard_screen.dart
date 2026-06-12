@@ -321,7 +321,7 @@ class _GreetingHeader extends StatelessWidget {
           width: 44,
           height: 44,
           padding: const EdgeInsets.all(2),
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             shape: BoxShape.circle,
             gradient: AppColors.brandGradient,
           ),
@@ -1192,7 +1192,7 @@ class _ActivityDotGridState extends State<_ActivityDotGrid>
                                           Container(
                                             width: 22,
                                             height: 22,
-                                            decoration: const BoxDecoration(
+                                            decoration: BoxDecoration(
                                               shape: BoxShape.circle,
                                               color: AppColors.brand,
                                             ),
@@ -1228,7 +1228,7 @@ class _ActivityDotGridState extends State<_ActivityDotGrid>
                                   : Container(
                                       width: 32,
                                       height: 32,
-                                      decoration: const BoxDecoration(
+                                      decoration: BoxDecoration(
                                         shape: BoxShape.circle,
                                         color: Color(0xFF1A1A2E),
                                       ),

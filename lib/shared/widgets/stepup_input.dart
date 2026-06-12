@@ -185,18 +185,18 @@ class _StepUpInputState extends State<StepUpInput> {
                 borderRadius:
                     BorderRadius.circular(AppSpacing.radiusMd),
                 borderSide:
-                    const BorderSide(color: AppColors.border),
+                    BorderSide(color: AppColors.border),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius:
                     BorderRadius.circular(AppSpacing.radiusMd),
                 borderSide:
-                    const BorderSide(color: AppColors.border),
+                    BorderSide(color: AppColors.border),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius:
                     BorderRadius.circular(AppSpacing.radiusMd),
-                borderSide: const BorderSide(
+                borderSide: BorderSide(
                   color: AppColors.brand,
                   width: 1.5,
                 ),

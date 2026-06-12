@@ -6,6 +6,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../shared/providers/auth_provider.dart';
+import '../../../core/theme/app_themes.dart';
+import '../../../core/theme/app_color_scheme.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -213,6 +215,219 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  void _showAppThemeSheet(BuildContext context, WidgetRef ref, AppTheme activeTheme) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.bgCard,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => Consumer(
+        builder: (context, ref, _) {
+          final currentTheme = ref.watch(themeProvider);
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.borderLight,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'Choose App Theme',
+                  style: GoogleFonts.spaceMono(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Select an accent theme for your application',
+                  style: GoogleFonts.inter(
+                      fontSize: 13, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 24),
+                GridView.count(
+                  shrinkWrap: true,
+                  crossAxisCount: 4,
+                  mainAxisSpacing: 16,
+                  crossAxisSpacing: 16,
+                  childAspectRatio: 0.8,
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: appThemes.map((theme) {
+                    final isSelected = currentTheme.id == theme.id;
+                    return GestureDetector(
+                      onTap: () {
+                        ref.read(themeProvider.notifier).setTheme(theme.id);
+                        HapticFeedback.mediumImpact();
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('${theme.name} theme applied!'),
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 50,
+                            height: 50,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: LinearGradient(
+                                colors: [theme.primary, theme.secondary],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              border: Border.all(
+                                color: isSelected
+                                    ? AppColors.textPrimary
+                                    : AppColors.border,
+                                width: isSelected ? 3 : 1.5,
+                              ),
+                              boxShadow: isSelected
+                                  ? [
+                                      BoxShadow(
+                                        color: theme.primary.withValues(alpha: 0.4),
+                                        blurRadius: 10,
+                                        spreadRadius: 2,
+                                      )
+                                    ]
+                                  : null,
+                            ),
+                            child: isSelected
+                                ? const Icon(Icons.check,
+                                    color: Colors.white, size: 20)
+                                : null,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            theme.name,
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              color: isSelected
+                                  ? AppColors.brand
+                                  : AppColors.textSecondary,
+                              fontWeight: isSelected
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildDisplayModeSelector(BuildContext context, WidgetRef ref, String activeMode) {
+    final modes = [
+      ('light', 'Light', Icons.wb_sunny_outlined),
+      ('dark', 'Dark', Icons.nightlight_round_outlined),
+      ('system', 'System', Icons.settings_brightness_outlined),
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36, height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.textSecondary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.display_settings_outlined, size: 18, color: AppColors.textSecondary),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Display Mode',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.bgDark,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(
+              children: modes.map((m) {
+                final modeId = m.$1;
+                final modeName = m.$2;
+                final modeIcon = m.$3;
+                final isSelected = activeMode == modeId;
+
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      ref.read(appModeProvider.notifier).setMode(modeId);
+                      HapticFeedback.lightImpact();
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        color: isSelected ? AppColors.brand : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            modeIcon,
+                            size: 16,
+                            color: isSelected ? Colors.white : AppColors.textSecondary,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            modeName,
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                              color: isSelected ? Colors.white : AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _openAiKeyCtrl.dispose();
@@ -222,6 +437,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider).currentUser;
+    final activeTheme = ref.watch(themeProvider);
+    final activeMode = ref.watch(appModeProvider);
 
     return Scaffold(
       backgroundColor: AppColors.bgDark,
@@ -312,11 +529,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 title: 'Appearance',
                 children: [
                   _TileItem(
-                    icon: Icons.palette_outlined,
+                    icon: Icons.map_outlined,
                     label: 'Map Theme',
                     subtitle: _themeName(_currentThemeIndex),
                     onTap: _showThemeSheet,
                   ),
+                  _TileItem(
+                    icon: Icons.palette_outlined,
+                    label: 'App Accent Theme',
+                    subtitle: activeTheme.name,
+                    onTap: () => _showAppThemeSheet(context, ref, activeTheme),
+                  ),
+                  _buildDisplayModeSelector(context, ref, activeMode),
                 ],
               ),
 
