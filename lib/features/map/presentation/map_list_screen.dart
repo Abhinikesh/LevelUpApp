@@ -356,12 +356,6 @@ class _WindingRoadmapPainter extends CustomPainter {
       ..strokeWidth = 6.0
       ..strokeCap = StrokeCap.round;
 
-    final dashPaint = Paint()
-      ..color = AppColors.brand
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0
-      ..strokeCap = StrokeCap.round;
-
     // Draw winding pathway path
     final path = Path()
       ..moveTo(20, size.height - 20)

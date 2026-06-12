@@ -110,8 +110,8 @@ class _ManualLevel {
   _ManualLevel({
     required String title,
     this.proofType = 'quiz',
-    this.isExpanded = false,
   })  : controller = TextEditingController(text: title),
+        isExpanded = false,
         subLevels = [];
 
   void dispose() {
