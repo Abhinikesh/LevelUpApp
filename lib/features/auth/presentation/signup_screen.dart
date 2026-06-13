@@ -301,57 +301,68 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.bgDark,
-      body: Stack(
-        children: [
-          // ── Top illustration ────────────────────────────
-          Positioned(
-            top: 0, left: 0, right: 0,
-            height: MediaQuery.of(context).size.height * 0.38,
-            child: _SignupTopIllustration(),
-          ),
-
-          // ── Bottom sheet ────────────────────────────────
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: FractionallySizedBox(
-              heightFactor: 0.68,
-              child: _buildSheet(isLoading),
-            ),
-          ),
-
-          // ── Back button ─────────────────────────────────
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 8,
-            left: AppSpacing.base,
-            child: IconButton(
-              onPressed: () => context.pop(),
-              icon: Container(
-                width: 36, height: 36,
-                decoration: BoxDecoration(
-                  color: AppColors.bgCard.withValues(alpha: 0.8),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: const Icon(Icons.arrow_back_ios_new,
-                    color: AppColors.textPrimary, size: 16),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Top buttons bar
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  IconButton(
+                    onPressed: () => context.pop(),
+                    icon: Container(
+                      width: 36, height: 36,
+                      decoration: BoxDecoration(
+                        color: AppColors.bgCard.withValues(alpha: 0.8),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: const Icon(Icons.arrow_back_ios_new,
+                          color: AppColors.textPrimary, size: 16),
+                    ),
+                  ),
+                  const SizedBox(width: 36),
+                ],
               ),
             ),
-          ),
-
-          // ── Confetti ─────────────────────────────────────
-          Align(
-            alignment: Alignment.topCenter,
-            child: ConfettiWidget(
-              confettiController: _confetti,
-              blastDirectionality: BlastDirectionality.explosive,
-              numberOfParticles: 30,
-              colors: const [
-                AppColors.brand, AppColors.coral, AppColors.green,
-                AppColors.gold, AppColors.yellow,
-              ],
+            Expanded(
+              child: Stack(
+                children: [
+                  SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    child: Column(
+                      children: [
+                        // Top illustration area (fixed height)
+                        SizedBox(
+                          height: 180,
+                          child: _SignupTopIllustration(),
+                        ),
+                        const SizedBox(height: 16),
+                        // Form
+                        _buildSheet(isLoading),
+                      ],
+                    ),
+                  ),
+                  // Confetti overlay on top
+                  Align(
+                    alignment: Alignment.topCenter,
+                    child: ConfettiWidget(
+                      confettiController: _confetti,
+                      blastDirectionality: BlastDirectionality.explosive,
+                      numberOfParticles: 30,
+                      colors: const [
+                        AppColors.brand, AppColors.coral, AppColors.green,
+                        AppColors.gold, AppColors.yellow,
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -359,144 +370,120 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   Widget _buildSheet(bool isLoading) {
     Widget sheet = Container(
       width: double.infinity,
-      decoration: const BoxDecoration(
-        color: AppColors.bgCard,
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(AppSpacing.radiusXxl + 8),
-          topRight: Radius.circular(AppSpacing.radiusXxl + 8),
-        ),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.pagePadding, 0,
+        AppSpacing.pagePadding, AppSpacing.xl,
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: AppSpacing.md),
-          Container(
-            width: 40, height: 4,
-            decoration: BoxDecoration(
-              color: AppColors.borderLight,
-              borderRadius: BorderRadius.circular(2),
+          Text('Start Your Journey',
+              style: GoogleFonts.syne(
+                  fontSize: 26, fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary))
+              .animate().fadeIn(duration: 400.ms).slideY(begin: 0.2, end: 0),
+
+          const SizedBox(height: AppSpacing.xs),
+          Text('Create your free account',
+              style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary))
+              .animate().fadeIn(delay: 100.ms),
+
+          const SizedBox(height: AppSpacing.xxl),
+
+          StepUpInput(
+            label: 'Your Name',
+            hint: 'Ash Ketchum',
+            controller: _nameCtrl,
+            errorText: _nameErr,
+            textInputAction: TextInputAction.next,
+            prefixIcon: const Icon(Icons.person_outline, size: AppSpacing.iconMd),
+          ).animate().fadeIn(delay: 150.ms),
+
+          const SizedBox(height: AppSpacing.base),
+
+          StepUpInput(
+            label: 'Email Address',
+            hint: 'you@example.com',
+            controller: _emailCtrl,
+            keyboardType: TextInputType.emailAddress,
+            errorText: _emailErr,
+            textInputAction: TextInputAction.next,
+            prefixIcon: const Icon(Icons.mail_outline, size: AppSpacing.iconMd),
+            autofillHints: const [AutofillHints.email],
+          ).animate().fadeIn(delay: 210.ms),
+
+          const SizedBox(height: AppSpacing.base),
+
+          // Password + strength bar
+          StepUpInput(
+            label: 'Create Password',
+            hint: '8+ characters',
+            controller: _passCtrl,
+            obscureText: true,
+            errorText: _passErr,
+            textInputAction: TextInputAction.next,
+            prefixIcon: const Icon(Icons.lock_outline, size: AppSpacing.iconMd),
+            autofillHints: const [AutofillHints.newPassword],
+          ).animate().fadeIn(delay: 270.ms),
+
+          if (_passCtrl.text.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _PasswordStrengthBar(strength: _passStrength),
+          ],
+
+          const SizedBox(height: AppSpacing.base),
+
+          // Confirm password + match indicator
+          _ConfirmField(
+            confirmCtrl: _confirmCtrl,
+            passCtrl: _passCtrl,
+            errorText: _confirmErr,
+            onSubmitted: (_) => _register(),
+          ).animate().fadeIn(delay: 330.ms),
+
+          const SizedBox(height: AppSpacing.xl),
+
+          StepUpButton(
+            label: 'Create Account 🚀',
+            isLoading: isLoading,
+            onPressed: _register,
+          ).animate().fadeIn(delay: 390.ms),
+
+          const SizedBox(height: AppSpacing.base),
+
+          Row(children: [
+            const Expanded(child: Divider(color: AppColors.border)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              child: Text('or', style: GoogleFonts.inter(fontSize: 13, color: AppColors.textMuted)),
             ),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.pagePadding, AppSpacing.xl,
-                AppSpacing.pagePadding, AppSpacing.xl,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Start Your Journey',
-                      style: GoogleFonts.syne(
-                          fontSize: 26, fontWeight: FontWeight.w800,
-                          color: AppColors.textPrimary))
-                      .animate().fadeIn(duration: 400.ms).slideY(begin: 0.2, end: 0),
+            const Expanded(child: Divider(color: AppColors.border)),
+          ]).animate().fadeIn(delay: 440.ms),
 
-                  const SizedBox(height: AppSpacing.xs),
-                  Text('Create your free account',
-                      style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary))
-                      .animate().fadeIn(delay: 100.ms),
+          const SizedBox(height: AppSpacing.base),
 
-                  const SizedBox(height: AppSpacing.xxl),
+          _GoogleButton(onPressed: _handleGoogleSignIn).animate().fadeIn(delay: 490.ms),
 
-                  StepUpInput(
-                    label: 'Your Name',
-                    hint: 'Ash Ketchum',
-                    controller: _nameCtrl,
-                    errorText: _nameErr,
-                    textInputAction: TextInputAction.next,
-                    prefixIcon: const Icon(Icons.person_outline, size: AppSpacing.iconMd),
-                  ).animate().fadeIn(delay: 150.ms),
+          const SizedBox(height: AppSpacing.xl),
 
-                  const SizedBox(height: AppSpacing.base),
-
-                  StepUpInput(
-                    label: 'Email Address',
-                    hint: 'you@example.com',
-                    controller: _emailCtrl,
-                    keyboardType: TextInputType.emailAddress,
-                    errorText: _emailErr,
-                    textInputAction: TextInputAction.next,
-                    prefixIcon: const Icon(Icons.mail_outline, size: AppSpacing.iconMd),
-                    autofillHints: const [AutofillHints.email],
-                  ).animate().fadeIn(delay: 210.ms),
-
-                  const SizedBox(height: AppSpacing.base),
-
-                  // Password + strength bar
-                  StepUpInput(
-                    label: 'Create Password',
-                    hint: '8+ characters',
-                    controller: _passCtrl,
-                    obscureText: true,
-                    errorText: _passErr,
-                    textInputAction: TextInputAction.next,
-                    prefixIcon: const Icon(Icons.lock_outline, size: AppSpacing.iconMd),
-                    autofillHints: const [AutofillHints.newPassword],
-                  ).animate().fadeIn(delay: 270.ms),
-
-                  if (_passCtrl.text.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    _PasswordStrengthBar(strength: _passStrength),
+          Center(
+            child: GestureDetector(
+              onTap: () => context.pop(),
+              child: RichText(
+                text: TextSpan(
+                  style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary),
+                  children: [
+                    const TextSpan(text: 'Already have an account? '),
+                    TextSpan(
+                      text: 'Login',
+                      style: GoogleFonts.inter(
+                          fontSize: 14, color: AppColors.brand, fontWeight: FontWeight.w600),
+                    ),
                   ],
-
-                  const SizedBox(height: AppSpacing.base),
-
-                  // Confirm password + match indicator
-                  _ConfirmField(
-                    confirmCtrl: _confirmCtrl,
-                    passCtrl: _passCtrl,
-                    errorText: _confirmErr,
-                    onSubmitted: (_) => _register(),
-                  ).animate().fadeIn(delay: 330.ms),
-
-                  const SizedBox(height: AppSpacing.xl),
-
-                  StepUpButton(
-                    label: 'Create Account 🚀',
-                    isLoading: isLoading,
-                    onPressed: _register,
-                  ).animate().fadeIn(delay: 390.ms),
-
-                  const SizedBox(height: AppSpacing.base),
-
-                  Row(children: [
-                    const Expanded(child: Divider(color: AppColors.border)),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                      child: Text('or', style: GoogleFonts.inter(fontSize: 13, color: AppColors.textMuted)),
-                    ),
-                    const Expanded(child: Divider(color: AppColors.border)),
-                  ]).animate().fadeIn(delay: 440.ms),
-
-                  const SizedBox(height: AppSpacing.base),
-
-                  _GoogleButton(onPressed: _handleGoogleSignIn).animate().fadeIn(delay: 490.ms),
-
-                  const SizedBox(height: AppSpacing.xl),
-
-                  Center(
-                    child: GestureDetector(
-                      onTap: () => context.pop(),
-                      child: RichText(
-                        text: TextSpan(
-                          style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary),
-                          children: [
-                            const TextSpan(text: 'Already have an account? '),
-                            TextSpan(
-                              text: 'Login',
-                              style: GoogleFonts.inter(
-                                  fontSize: 14, color: AppColors.brand, fontWeight: FontWeight.w600),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ).animate().fadeIn(delay: 540.ms),
-                ],
+                ),
               ),
             ),
-          ),
+          ).animate().fadeIn(delay: 540.ms),
         ],
       ),
     );

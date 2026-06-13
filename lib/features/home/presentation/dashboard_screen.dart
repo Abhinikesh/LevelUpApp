@@ -444,7 +444,7 @@ class _XpCardState extends State<_XpCard>
                   padding:
                       const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                   decoration: BoxDecoration(
-                    color: AppColors.gold.withOpacity(0.14),
+                    color: AppColors.gold.withValues(alpha: 0.14),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
@@ -599,7 +599,7 @@ class _StreakCardState extends State<_StreakCard>
                     boxShadow: active
                         ? [
                             BoxShadow(
-                                color: AppColors.coral.withOpacity(0.5),
+                                color: AppColors.coral.withValues(alpha: 0.5),
                                 blurRadius: 5)
                           ]
                         : null,
@@ -673,7 +673,7 @@ class _ActiveLevelCardState extends State<_ActiveLevelCard>
           ),
           boxShadow: [
             BoxShadow(
-              color: AppColors.brand.withOpacity(0.18),
+              color: AppColors.brand.withValues(alpha: 0.18),
               blurRadius: 28,
               spreadRadius: 2,
             ),
@@ -697,10 +697,10 @@ class _ActiveLevelCardState extends State<_ActiveLevelCard>
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppColors.brand.withOpacity(0.12),
+                    color: AppColors.brand.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                        color: AppColors.brand.withOpacity(0.25), width: 1),
+                        color: AppColors.brand.withValues(alpha: 0.25), width: 1),
                   ),
                   child: Text(
                     'CONTINUE',
@@ -758,11 +758,11 @@ class _ActiveLevelCardState extends State<_ActiveLevelCard>
             const SizedBox(height: 14),
             Row(
               children: [
-                _InfoChip(icon: '📋', label: widget.proofType),
+                _InfoChip(icon: Icons.assignment_outlined, label: widget.proofType, color: AppColors.brand),
                 const SizedBox(width: 8),
-                _InfoChip(icon: '⏱', label: '${widget.estimatedMinutes} min'),
+                _InfoChip(icon: Icons.timer_outlined, label: '${widget.estimatedMinutes} min', color: AppColors.textSecondary),
                 const SizedBox(width: 8),
-                _InfoChip(icon: '⚡', label: '${widget.xpReward} XP'),
+                _InfoChip(icon: Icons.bolt, label: '${widget.xpReward} XP', color: AppColors.gold),
               ],
             ),
             const SizedBox(height: 18),
@@ -776,7 +776,7 @@ class _ActiveLevelCardState extends State<_ActiveLevelCard>
                   borderRadius: BorderRadius.circular(14),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.brand.withOpacity(0.35),
+                      color: AppColors.brand.withValues(alpha: 0.35),
                       blurRadius: 16,
                       offset: const Offset(0, 6),
                     ),
@@ -810,29 +810,30 @@ class _ActiveLevelCardState extends State<_ActiveLevelCard>
 }
 
 class _InfoChip extends StatelessWidget {
-  final String icon;
+  final IconData icon;
   final String label;
-  const _InfoChip({required this.icon, required this.label});
+  final Color color;
+  const _InfoChip({required this.icon, required this.label, this.color = AppColors.textSecondary});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: AppColors.bgCardLight,
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.borderLight),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(icon, style: const TextStyle(fontSize: 11)),
+          Icon(icon, size: 12, color: color),
           const SizedBox(width: 4),
           Text(
             label,
             style: GoogleFonts.inter(
               fontSize: 11,
-              color: AppColors.textSecondary,
+              color: color,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -860,7 +861,7 @@ class _EmptyRoadmapsState extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
         decoration: BoxDecoration(
-          color: AppColors.brand.withOpacity(0.03),
+          color: AppColors.brand.withValues(alpha: 0.03),
           borderRadius: BorderRadius.circular(20),
         ),
         child: Column(
@@ -896,7 +897,7 @@ class _EmptyRoadmapsState extends StatelessWidget {
                   borderRadius: BorderRadius.circular(50),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.brand.withOpacity(0.4),
+                      color: AppColors.brand.withValues(alpha: 0.4),
                       blurRadius: 16,
                       offset: const Offset(0, 6),
                     ),
@@ -1193,8 +1194,8 @@ class _ActivityDotGridState extends State<_ActivityDotGrid>
                                             height: 32,
                                             decoration: BoxDecoration(
                                               shape: BoxShape.circle,
-                                              color: AppColors.brand.withOpacity(
-                                                  0.4 * _pulseCtrl.value),
+                                              color: AppColors.brand.withValues(
+                                                  alpha: 0.4 * _pulseCtrl.value),
                                             ),
                                           ),
                                           // Inner solid dot
@@ -1221,7 +1222,7 @@ class _ActivityDotGridState extends State<_ActivityDotGrid>
                                         boxShadow: [
                                           BoxShadow(
                                             color: AppColors.brand
-                                                .withOpacity(0.35),
+                                                .withValues(alpha: 0.35),
                                             blurRadius: 6,
                                           ),
                                         ],

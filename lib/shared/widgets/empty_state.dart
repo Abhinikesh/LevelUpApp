@@ -140,6 +140,45 @@ class EmptyNotifications extends StatelessWidget {
   }
 }
 
+class EmptyBadges extends StatelessWidget {
+  const EmptyBadges({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const EmptyState(
+      emoji: '🏅',
+      title: 'No Badges Yet',
+      subtitle: 'Complete levels and streaks to earn your first badge.',
+    );
+  }
+}
+
+class EmptyLeaderboard extends StatelessWidget {
+  const EmptyLeaderboard({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const EmptyState(
+      emoji: '🏆',
+      title: 'Leaderboard Empty',
+      subtitle: 'Add friends and earn XP to appear on the leaderboard.',
+    );
+  }
+}
+
+class EmptyAchievements extends StatelessWidget {
+  const EmptyAchievements({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const EmptyState(
+      emoji: '⭐',
+      title: 'No Achievements Yet',
+      subtitle: 'Keep levelling up to unlock achievements!',
+    );
+  }
+}
+
 class ErrorState extends StatelessWidget {
   final String message;
   final VoidCallback? onRetry;

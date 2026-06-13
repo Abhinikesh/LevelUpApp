@@ -101,7 +101,7 @@ class _StepUpInputState extends State<StepUpInput> {
             boxShadow: _isFocused && !hasError
                 ? [
                     BoxShadow(
-                      color: AppColors.brand.withOpacity(0.15),
+                      color: AppColors.brand.withValues(alpha: 0.15),
                       blurRadius: 12,
                       spreadRadius: 1,
                     ),
@@ -109,7 +109,7 @@ class _StepUpInputState extends State<StepUpInput> {
                 : hasError
                     ? [
                         BoxShadow(
-                          color: AppColors.error.withOpacity(0.15),
+                          color: AppColors.error.withValues(alpha: 0.15),
                           blurRadius: 12,
                           spreadRadius: 1,
                         ),

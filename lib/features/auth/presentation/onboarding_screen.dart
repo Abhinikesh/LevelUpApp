@@ -166,45 +166,42 @@ class _PageWrapper extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.pagePadding),
       child: Column(
         children: [
-          // Illustration area — 55% of screen
+          // Illustration area
           Expanded(
-            flex: 55,
+            flex: 3,
             child: Center(child: illustration),
           ),
+          const SizedBox(height: 16),
           // Text area
-          Expanded(
-            flex: 45,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Text(
-                  title,
-                  style: GoogleFonts.syne(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                    height: 1.2,
-                  ),
-                  textAlign: TextAlign.center,
-                )
-                    .animate()
-                    .fadeIn(duration: 400.ms)
-                    .slideY(begin: 0.2, end: 0, duration: 400.ms),
-                const SizedBox(height: AppSpacing.md),
-                Text(
-                  subtitle,
-                  style: GoogleFonts.inter(
-                    fontSize: 15,
-                    color: AppColors.textSecondary,
-                    height: 1.6,
-                  ),
-                  textAlign: TextAlign.center,
-                )
-                    .animate()
-                    .fadeIn(delay: 150.ms, duration: 400.ms),
-              ],
+          Text(
+            title,
+            style: GoogleFonts.syne(
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textPrimary,
+              height: 1.2,
             ),
+            textAlign: TextAlign.center,
+          )
+              .animate()
+              .fadeIn(duration: 400.ms)
+              .slideY(begin: 0.2, end: 0, duration: 400.ms),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              subtitle,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: AppColors.textSecondary,
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
+            )
+                .animate()
+                .fadeIn(delay: 150.ms, duration: 400.ms),
           ),
+          const Spacer(),
         ],
       ),
     );

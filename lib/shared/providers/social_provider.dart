@@ -252,7 +252,7 @@ class SocialNotifier extends StateNotifier<SocialState> {
   void clearError() => state = state.copyWith(error: null);
 }
 
-final _mockFriends = const [
+const _mockFriends = [
   MockFriend(
     id: 'mock-f1',
     name: 'Alex Kim',
@@ -300,7 +300,7 @@ final _mockFriends = const [
   ),
 ];
 
-final _mockRequests = const [
+const _mockRequests = [
   MockFriend(
     id: 'mock-r1',
     name: 'Sofia Chen',
@@ -312,7 +312,7 @@ final _mockRequests = const [
   ),
 ];
 
-final _mockLeaderboard = const [
+const _mockLeaderboard = [
   LeaderboardEntry(name: 'James Wu', xp: 8400, color: Color(0xFF43E97B)),
   LeaderboardEntry(name: 'Alex Kim', xp: 6200, color: Color(0xFF6C63FF)),
   LeaderboardEntry(name: 'Priya Sharma', xp: 4100, color: Color(0xFFFF6584)),

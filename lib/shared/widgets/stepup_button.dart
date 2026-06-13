@@ -144,7 +144,7 @@ class _StepUpButtonState extends State<StepUpButton>
       case StepUpButtonVariant.primary:
         return [
           BoxShadow(
-            color: AppColors.brand.withOpacity(0.35),
+            color: AppColors.brand.withValues(alpha: 0.35),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
@@ -152,7 +152,7 @@ class _StepUpButtonState extends State<StepUpButton>
       case StepUpButtonVariant.danger:
         return [
           BoxShadow(
-            color: AppColors.error.withOpacity(0.35),
+            color: AppColors.error.withValues(alpha: 0.35),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),

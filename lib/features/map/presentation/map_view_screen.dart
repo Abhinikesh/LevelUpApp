@@ -10,6 +10,7 @@ import '../../../models/level_model.dart';
 import '../../../models/roadmap_model.dart';
 import '../../../shared/providers/level_provider.dart';
 import '../../../shared/providers/roadmap_provider.dart';
+import '../../../shared/widgets/animated_map_background.dart';
 
 // ─── Constants ──────────────────────────────────────────────────
 const double _kNodeSize = 80.0;
@@ -52,35 +53,6 @@ extension _MapBgExt on _MapBg {
     }
   }
 
-  RadialGradient get gradient {
-    switch (this) {
-      case _MapBg.darkPurple:
-        return const RadialGradient(
-          center: Alignment.topCenter,
-          radius: 1.5,
-          colors: [Color(0xFF1A0A3E), Color(0xFF080810)],
-        );
-      case _MapBg.deepOcean:
-        return const RadialGradient(
-          center: Alignment.topCenter,
-          radius: 1.5,
-          colors: [Color(0xFF071A2E), Color(0xFF080810)],
-        );
-      case _MapBg.darkForest:
-        return const RadialGradient(
-          center: Alignment.topCenter,
-          radius: 1.5,
-          colors: [Color(0xFF071A0E), Color(0xFF080810)],
-        );
-      case _MapBg.midnight:
-        return const RadialGradient(
-          center: Alignment.topCenter,
-          radius: 1.5,
-          colors: [Color(0xFF0A0A0A), Color(0xFF000000)],
-        );
-    }
-  }
-
   Color get dotColor {
     switch (this) {
       case _MapBg.darkPurple:
@@ -91,6 +63,20 @@ extension _MapBgExt on _MapBg {
         return AppColors.green;
       case _MapBg.midnight:
         return const Color(0xFF444444);
+    }
+  }
+
+  /// Maps the enum to the string ID expected by [AnimatedMapBackground].
+  String get themeId {
+    switch (this) {
+      case _MapBg.darkPurple:
+        return 'nebula';
+      case _MapBg.deepOcean:
+        return 'ocean';
+      case _MapBg.darkForest:
+        return 'forest';
+      case _MapBg.midnight:
+        return 'midnight';
     }
   }
 }
@@ -212,9 +198,11 @@ class _MapViewScreenState extends ConsumerState<MapViewScreen>
       ),
       body: Stack(
         children: [
-          // ── Radial gradient background ──────────────────────
-          Container(
-            decoration: BoxDecoration(gradient: _currentBg.gradient),
+          // ── Animated live-wallpaper background ─────────────
+          Positioned.fill(
+            child: AnimatedMapBackground(
+              themeId: _currentBg.themeId,
+            ),
           ),
 
           // ── Dot grid overlay ────────────────────────────────
@@ -224,40 +212,41 @@ class _MapViewScreenState extends ConsumerState<MapViewScreen>
           ),
 
           // ── Scroll content ──────────────────────────────────
-          CustomScrollView(
-            controller: _scrollController,
-            slivers: [
-              // Top bar (pinned)
-              SliverPersistentHeader(
-                pinned: true,
-                delegate: _MapTopBarDelegate(
-                  roadmap: roadmap,
-                  onBack: () => context.pop(),
-                  onSettings: _showBgSheet,
+          Column(
+            children: [
+              _MapTopBar(
+                roadmap: roadmap,
+                onBack: () => context.pop(),
+                onSettings: _showBgSheet,
+              ),
+              Expanded(
+                child: CustomScrollView(
+                  controller: _scrollController,
+                  slivers: [
+                    // Level nodes
+                    if (levelState.isLoading && levelState.levels.isEmpty)
+                      const SliverFillRemaining(
+                        child: Center(child: _MapLoadingShimmer()),
+                      )
+                    else
+                      SliverPadding(
+                        padding: EdgeInsets.only(
+                          bottom: MediaQuery.of(context).padding.bottom + 110,
+                          top: 16,
+                        ),
+                        sliver: SliverToBoxAdapter(
+                          child: _MapBody(
+                            levels: levelState.levels,
+                            pulseCtrl: _pulseCtrl,
+                            pulse2Ctrl: _pulse2Ctrl,
+                            roadmapId: widget.roadmapId,
+                            hasSubLevels: roadmap?.hasSubLevels ?? false,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-
-              // Level nodes
-              if (levelState.isLoading && levelState.levels.isEmpty)
-                const SliverFillRemaining(
-                  child: Center(child: _MapLoadingShimmer()),
-                )
-              else
-                SliverPadding(
-                  padding: EdgeInsets.only(
-                    bottom: MediaQuery.of(context).padding.bottom + 110,
-                    top: 16,
-                  ),
-                  sliver: SliverToBoxAdapter(
-                    child: _MapBody(
-                      levels: levelState.levels,
-                      pulseCtrl: _pulseCtrl,
-                      pulse2Ctrl: _pulse2Ctrl,
-                      roadmapId: widget.roadmapId,
-                      hasSubLevels: roadmap?.hasSubLevels ?? false,
-                    ),
-                  ),
-                ),
             ],
           ),
         ],
@@ -397,26 +386,20 @@ class _DotGridPainter extends CustomPainter {
   bool shouldRepaint(_DotGridPainter old) => old.color != color;
 }
 
-// ─── Top Bar Delegate ───────────────────────────────────────────
-class _MapTopBarDelegate extends SliverPersistentHeaderDelegate {
+// ─── Top Bar Widget ─────────────────────────────────────────────
+class _MapTopBar extends StatelessWidget {
   final RoadmapModel? roadmap;
   final VoidCallback onBack;
   final VoidCallback onSettings;
 
-  _MapTopBarDelegate({
+  const _MapTopBar({
     required this.roadmap,
     required this.onBack,
     required this.onSettings,
   });
 
   @override
-  double get minExtent => 64;
-  @override
-  double get maxExtent => 64;
-
-  @override
-  Widget build(
-      BuildContext context, double shrinkOffset, bool overlapsContent) {
+  Widget build(BuildContext context) {
     return Container(
       color: AppColors.bgDark.withValues(alpha: 0.94),
       child: SafeArea(
@@ -446,6 +429,7 @@ class _MapTopBarDelegate extends SliverPersistentHeaderDelegate {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       roadmap?.title ?? 'Loading...',
@@ -529,11 +513,8 @@ class _MapTopBarDelegate extends SliverPersistentHeaderDelegate {
       ),
     );
   }
-
-  @override
-  bool shouldRebuild(covariant _MapTopBarDelegate old) =>
-      old.roadmap != roadmap;
 }
+
 
 // ─── Map Body ───────────────────────────────────────────────────
 class _MapBody extends StatelessWidget {

@@ -43,7 +43,7 @@ class StepUpCard extends StatelessWidget {
         boxShadow: hasGlow
             ? [
                 BoxShadow(
-                  color: (glowColor ?? AppColors.brand).withOpacity(0.2),
+                  color: (glowColor ?? AppColors.brand).withValues(alpha: 0.2),
                   blurRadius: AppSpacing.shadowBlur,
                   spreadRadius: 2,
                 ),
@@ -66,7 +66,7 @@ class StepUpCard extends StatelessWidget {
               ? [
                   BoxShadow(
                     color:
-                        (glowColor ?? AppColors.brand).withOpacity(0.25),
+                        (glowColor ?? AppColors.brand).withValues(alpha: 0.25),
                     blurRadius: AppSpacing.shadowBlur,
                     spreadRadius: 2,
                   ),

@@ -107,7 +107,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           // ── Premium Profile Header ───────────────────────────────
           SliverToBoxAdapter(
             child: Container(
-              height: 280,
               decoration: const BoxDecoration(
                 color: AppColors.bgDark,
               ),
@@ -141,137 +140,140 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   // Header contents
                   SafeArea(
                     bottom: false,
-                    child: Column(
-                      children: [
-                        // Center Profile title & settings
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Center Profile title & settings
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                context.canPop()
+                                    ? GestureDetector(
+                                        onTap: () => context.pop(),
+                                        child: const Icon(Icons.arrow_back_ios_new,
+                                            color: Colors.white, size: 20),
+                                      )
+                                    : const SizedBox(width: 24),
+                                Text(
+                                  'Profile',
+                                  style: GoogleFonts.spaceMono(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                GestureDetector(
+                                  onTap: () => context.push(AppRoutes.settings),
+                                  child: const Icon(Icons.settings_rounded,
+                                      color: Colors.white, size: 22),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          // Avatar (centered, 96px)
+                          Stack(
+                            alignment: Alignment.center,
                             children: [
-                              context.canPop()
-                                  ? GestureDetector(
-                                      onTap: () => context.pop(),
-                                      child: const Icon(Icons.arrow_back_ios_new,
-                                          color: Colors.white, size: 20),
-                                    )
-                                  : const SizedBox(width: 24),
-                              Text(
-                                'Profile',
-                                style: GoogleFonts.spaceMono(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
+                              AnimatedBuilder(
+                                animation: _rotationController,
+                                builder: (_, __) => CustomPaint(
+                                  size: const Size(96, 96),
+                                  painter: _AvatarRingPainter(
+                                      angle: _rotationController.value *
+                                          2 *
+                                          math.pi),
                                 ),
                               ),
-                              GestureDetector(
-                                onTap: () => context.push(AppRoutes.settings),
-                                child: const Icon(Icons.settings_rounded,
-                                    color: Colors.white, size: 22),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Spacer(),
-                        // Avatar (centered, 96px)
-                        Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            AnimatedBuilder(
-                              animation: _rotationController,
-                              builder: (_, __) => CustomPaint(
-                                size: const Size(96, 96),
-                                painter: _AvatarRingPainter(
-                                    angle: _rotationController.value *
-                                        2 *
-                                        math.pi),
-                              ),
-                            ),
-                            Container(
-                              width: 86,
-                              height: 86,
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: AppColors.bgDark,
-                              ),
-                              child: Center(
-                                child: Container(
-                                  width: 80,
-                                  height: 80,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    gradient: AppColors.darkGradient,
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      (user?.name.isNotEmpty == true)
-                                          ? user!.name[0].toUpperCase()
-                                          : '?',
-                                      style: GoogleFonts.spaceMono(
-                                        fontSize: 34,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppColors.textPrimary,
+                              Container(
+                                width: 86,
+                                height: 86,
+                                decoration: const BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: AppColors.bgDark,
+                                ),
+                                child: Center(
+                                  child: Container(
+                                    width: 80,
+                                    height: 80,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      gradient: AppColors.darkGradient,
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        (user?.name.isNotEmpty == true)
+                                            ? user!.name[0].toUpperCase()
+                                            : '?',
+                                        style: GoogleFonts.spaceMono(
+                                          fontSize: 34,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.textPrimary,
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
-                            // Edit button bottom right
-                            Positioned(
-                              bottom: 0,
-                              right: 0,
-                              child: BounceOnTap(
-                                onTap: () {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                          'Avatar uploads coming soon in Beta!'),
-                                      duration: Duration(seconds: 2),
+                              // Edit button bottom right
+                              Positioned(
+                                bottom: 0,
+                                right: 0,
+                                child: BounceOnTap(
+                                  onTap: () {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                            'Avatar uploads coming soon in Beta!'),
+                                        duration: Duration(seconds: 2),
+                                      ),
+                                    );
+                                  },
+                                  child: Container(
+                                    width: 28,
+                                    height: 28,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF1C1C2E),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                          color: AppColors.bgDark, width: 2),
                                     ),
-                                  );
-                                },
-                                child: Container(
-                                  width: 28,
-                                  height: 28,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF1C1C2E),
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                        color: AppColors.bgDark, width: 2),
-                                  ),
-                                  child: const Icon(
-                                    Icons.camera_alt_rounded,
-                                    size: 13,
-                                    color: Colors.white,
+                                    child: const Icon(
+                                      Icons.camera_alt_rounded,
+                                      size: 13,
+                                      color: Colors.white,
+                                    ),
                                   ),
                                 ),
                               ),
+                            ],
+                          ).animate().scale(
+                              duration: 500.ms, curve: Curves.elasticOut),
+                          const SizedBox(height: 12),
+                          // Name
+                          Text(
+                            user?.name ?? 'Learner',
+                            style: GoogleFonts.spaceMono(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
                             ),
-                          ],
-                        ).animate().scale(
-                            duration: 500.ms, curve: Curves.elasticOut),
-                        const SizedBox(height: 12),
-                        // Name
-                        Text(
-                          user?.name ?? 'Learner',
-                          style: GoogleFonts.spaceMono(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        // Tagline
-                        Text(
-                          'Level ${user?.level ?? 1} • $title',
-                          style: GoogleFonts.inter(
-                            fontSize: 13,
-                            color: AppColors.textSecondary,
+                          const SizedBox(height: 4),
+                          // Tagline
+                          Text(
+                            'Level ${user?.level ?? 1} • $title',
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: AppColors.textSecondary,
+                            ),
                           ),
-                        ),
-                        const Spacer(),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ],

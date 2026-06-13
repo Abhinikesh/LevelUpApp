@@ -187,7 +187,9 @@ class _QuizScreenState extends ConsumerState<QuizScreen>
     final levelData = ref.watch(levelByIdProvider(widget.levelId));
     if (levelData != null && _q.isEmpty) {
       _q.addAll(_generateQuestions(levelData));
-      for (int i = 0; i < _q.length; i++) _answers.add(null);
+      for (int i = 0; i < _q.length; i++) {
+        _answers.add(null);
+      }
       _level = levelData;
     }
     final level = levelData ?? _level;
@@ -230,7 +232,9 @@ class _QuizScreenState extends ConsumerState<QuizScreen>
                       setState(() {
                         _phase = _QuizPhase.intro;
                         _answers.clear();
-                        for (int i = 0; i < _q.length; i++) _answers.add(null);
+                        for (int i = 0; i < _q.length; i++) {
+                          _answers.add(null);
+                        }
                       });
                     },
                   ),
@@ -484,9 +488,10 @@ class _QuestionView extends StatelessWidget {
                     : AppColors.green.withValues(alpha: 0.4);
                 bgColor = AppColors.green.withValues(
                     alpha: isSelected ? 0.12 : 0.05);
-                if (isSelected)
+                if (isSelected) {
                   trailing = const Icon(Icons.check_circle,
                       color: AppColors.green, size: 20);
+                }
               } else if (isSelected) {
                 borderColor = AppColors.error;
                 bgColor = AppColors.error.withValues(alpha: 0.1);

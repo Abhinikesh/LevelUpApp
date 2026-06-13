@@ -8,6 +8,7 @@ import '../../../core/router/app_router.dart';
 import '../../../core/utils/helpers.dart';
 import '../../../shared/providers/auth_provider.dart';
 import '../../../shared/providers/notifications_provider.dart';
+import '../../../core/network/sync_manager.dart';
 import '../../../shared/widgets/premium_animations.dart';
 
 class HomeShell extends ConsumerStatefulWidget {
@@ -19,6 +20,20 @@ class HomeShell extends ConsumerStatefulWidget {
 
 class _HomeShellState extends ConsumerState<HomeShell> {
   int _selectedIndex = 0;
+  late SyncManager _syncManager;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncManager = SyncManager(ref);
+    _syncManager.start();
+  }
+
+  @override
+  void dispose() {
+    _syncManager.stop();
+    super.dispose();
+  }
 
   static const _tabs = [
     _NavItem(label: 'Home',    icon: Icons.grid_view_outlined,   activeIcon: Icons.grid_view_rounded,    path: '/home/dashboard'),
@@ -45,38 +60,41 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     return Scaffold(
       backgroundColor: AppColors.bgDark,
       extendBody: true,
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(60),
-        child: _TopBar(
-          xp: user?.xpTotal ?? 0,
-          streak: user?.streakCount ?? 0,
-          screenTitle: _tabs[_selectedIndex].label,
-        ),
-      ),
-      body: Stack(
-        clipBehavior: Clip.none,
+      body: Column(
         children: [
-          Positioned.fill(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 250),
-              switchInCurve: Curves.easeIn,
-              switchOutCurve: Curves.easeOut,
-              transitionBuilder: (child, anim) =>
-                  FadeTransition(opacity: anim, child: child),
-              child: KeyedSubtree(
-                key: ValueKey(_selectedIndex),
-                child: widget.child,
-              ),
-            ),
+          _TopBar(
+            xp: user?.xpTotal ?? 0,
+            streak: user?.streakCount ?? 0,
+            screenTitle: _tabs[_selectedIndex].label,
           ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: _BottomNav(
-              selected: _selectedIndex,
-              tabs: _tabs,
-              onTap: _onTap,
+          Expanded(
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned.fill(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 250),
+                    switchInCurve: Curves.easeIn,
+                    switchOutCurve: Curves.easeOut,
+                    transitionBuilder: (child, anim) =>
+                        FadeTransition(opacity: anim, child: child),
+                    child: KeyedSubtree(
+                      key: ValueKey(_selectedIndex),
+                      child: widget.child,
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: _BottomNav(
+                    selected: _selectedIndex,
+                    tabs: _tabs,
+                    onTap: _onTap,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -86,14 +104,11 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 }
 
 // ─── Custom top bar ───────────────────────────────────────────
-class _TopBar extends ConsumerWidget implements PreferredSizeWidget {
+class _TopBar extends ConsumerWidget {
   final int xp;
   final int streak;
   final String screenTitle;
   const _TopBar({required this.xp, required this.streak, required this.screenTitle});
-
-  @override
-  Size get preferredSize => const Size.fromHeight(60);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -259,7 +274,7 @@ class _TopBar extends ConsumerWidget implements PreferredSizeWidget {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.gold.withOpacity(0.08),
+                color: AppColors.gold.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
               child: const Text('⚡', style: TextStyle(fontSize: 36)),
@@ -320,7 +335,7 @@ class _TopBar extends ConsumerWidget implements PreferredSizeWidget {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.coral.withOpacity(0.08),
+                color: AppColors.coral.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
               child: const WobbleWidget(
@@ -448,7 +463,7 @@ class _CenterFab extends StatelessWidget {
           ),
           boxShadow: [
             BoxShadow(
-              color: AppColors.brand.withOpacity(0.5),
+              color: AppColors.brand.withValues(alpha: 0.5),
               blurRadius: 20,
               spreadRadius: 2,
             ),

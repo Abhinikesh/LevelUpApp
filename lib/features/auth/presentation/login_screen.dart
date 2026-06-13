@@ -94,11 +94,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  String _nameFromEmail(String email) {
-    final local = email.split('@').first;
-    return local[0].toUpperCase() + local.substring(1);
-  }
-
   void _showGoogleConfigModal() {
     showDialog(
       context: context,
@@ -277,77 +272,76 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.bgDark,
-      body: Stack(
-        children: [
-          // ── Top illustration area ─────────────────────────
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: MediaQuery.of(context).size.height * 0.42,
-            child: _TopIllustration(),
-          ),
-
-          // ── Bottom sheet ──────────────────────────────────
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: FractionallySizedBox(
-              heightFactor: 0.64,
-              child: _FormSheet(
-                emailCtrl: _emailCtrl,
-                passCtrl: _passCtrl,
-                emailErr: _emailErr,
-                passErr: _passErr,
-                isLoading: isLoading,
-                shakeForm: _shakeForm,
-                onLogin: _login,
-                onGoogleSignIn: _handleGoogleSignIn,
-                onForgot: () {},
-                onSignUp: () => context.push(AppRoutes.signup),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Top buttons bar
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  IconButton(
+                    onPressed: () => context.canPop() ? context.pop() : null,
+                    icon: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: AppColors.bgCard.withValues(alpha: 0.8),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: const Icon(Icons.arrow_back_ios_new,
+                          color: AppColors.textPrimary, size: 16),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: _showServerSettingsModal,
+                    icon: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: AppColors.bgCard.withValues(alpha: 0.8),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: const Icon(Icons.dns_outlined,
+                          color: AppColors.textPrimary, size: 18),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
-
-          // ── Back button ───────────────────────────────────
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 8,
-            left: AppSpacing.base,
-            child: IconButton(
-              onPressed: () => context.canPop() ? context.pop() : null,
-              icon: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: AppColors.bgCard.withValues(alpha: 0.8),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.border),
+            Expanded(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Column(
+                  children: [
+                    // Top illustration area (fixed height)
+                    SizedBox(
+                      height: 180,
+                      child: _TopIllustration(),
+                    ),
+                    const SizedBox(height: 16),
+                    // Bottom sheet form
+                    _FormSheet(
+                      emailCtrl: _emailCtrl,
+                      passCtrl: _passCtrl,
+                      emailErr: _emailErr,
+                      passErr: _passErr,
+                      isLoading: isLoading,
+                      shakeForm: _shakeForm,
+                      onLogin: _login,
+                      onGoogleSignIn: _handleGoogleSignIn,
+                      onForgot: () {},
+                      onSignUp: () => context.push(AppRoutes.signup),
+                    ),
+                  ],
                 ),
-                child: const Icon(Icons.arrow_back_ios_new,
-                    color: AppColors.textPrimary, size: 16),
               ),
             ),
-          ),
-
-          // ── Server Settings Button ─────────────────────────
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 8,
-            right: AppSpacing.base,
-            child: IconButton(
-              onPressed: _showServerSettingsModal,
-              icon: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: AppColors.bgCard.withValues(alpha: 0.8),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: const Icon(Icons.dns_outlined,
-                    color: AppColors.textPrimary, size: 18),
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -508,129 +502,105 @@ class _FormSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     Widget form = Container(
       width: double.infinity,
-      decoration: const BoxDecoration(
-        color: AppColors.bgCard,
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(AppSpacing.radiusXxl + 8),
-          topRight: Radius.circular(AppSpacing.radiusXxl + 8),
-        ),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.pagePadding, 0,
+        AppSpacing.pagePadding, AppSpacing.xl,
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Drag handle
-          const SizedBox(height: AppSpacing.md),
-          Container(
-            width: 40, height: 4,
-            decoration: BoxDecoration(
-              color: AppColors.borderLight,
-              borderRadius: BorderRadius.circular(2),
+          Text('Welcome Back',
+              style: GoogleFonts.syne(
+                fontSize: 26, fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary,
+              ))
+              .animate().fadeIn(duration: 400.ms).slideY(begin: 0.2, end: 0),
+
+          const SizedBox(height: AppSpacing.xs),
+          Text('Continue your journey',
+              style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary))
+              .animate().fadeIn(delay: 100.ms),
+
+          const SizedBox(height: AppSpacing.xxl),
+
+          StepUpInput(
+            label: 'Email',
+            hint: 'you@example.com',
+            controller: emailCtrl,
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.next,
+            errorText: emailErr,
+            prefixIcon: const Icon(Icons.mail_outline, size: AppSpacing.iconMd),
+            autofillHints: const [AutofillHints.email],
+          ).animate().fadeIn(delay: 150.ms),
+
+          const SizedBox(height: AppSpacing.base),
+
+          StepUpInput(
+            label: 'Password',
+            hint: '••••••••',
+            controller: passCtrl,
+            obscureText: true,
+            errorText: passErr,
+            prefixIcon: const Icon(Icons.lock_outline, size: AppSpacing.iconMd),
+            autofillHints: const [AutofillHints.password],
+            onSubmitted: (_) => onLogin(),
+          ).animate().fadeIn(delay: 220.ms),
+
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: onForgot,
+              style: TextButton.styleFrom(padding: EdgeInsets.zero),
+              child: Text('Forgot Password?',
+                  style: GoogleFonts.inter(
+                      fontSize: 13, color: AppColors.brand, fontWeight: FontWeight.w500)),
             ),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.pagePadding, AppSpacing.xl,
-                AppSpacing.pagePadding, AppSpacing.xl,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Welcome Back',
-                      style: GoogleFonts.syne(
-                        fontSize: 26, fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary,
-                      ))
-                      .animate().fadeIn(duration: 400.ms).slideY(begin: 0.2, end: 0),
+          ).animate().fadeIn(delay: 290.ms),
 
-                  const SizedBox(height: AppSpacing.xs),
-                  Text('Continue your journey',
-                      style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary))
-                      .animate().fadeIn(delay: 100.ms),
+          const SizedBox(height: AppSpacing.sm),
 
-                  const SizedBox(height: AppSpacing.xxl),
+          StepUpButton(label: 'Login', isLoading: isLoading, onPressed: onLogin)
+              .animate().fadeIn(delay: 350.ms),
 
-                  StepUpInput(
-                    label: 'Email',
-                    hint: 'you@example.com',
-                    controller: emailCtrl,
-                    keyboardType: TextInputType.emailAddress,
-                    textInputAction: TextInputAction.next,
-                    errorText: emailErr,
-                    prefixIcon: const Icon(Icons.mail_outline, size: AppSpacing.iconMd),
-                    autofillHints: const [AutofillHints.email],
-                  ).animate().fadeIn(delay: 150.ms),
+          const SizedBox(height: AppSpacing.base),
 
-                  const SizedBox(height: AppSpacing.base),
+          // Divider
+          Row(children: [
+            const Expanded(child: Divider(color: AppColors.border)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              child: Text('or', style: GoogleFonts.inter(fontSize: 13, color: AppColors.textMuted)),
+            ),
+            const Expanded(child: Divider(color: AppColors.border)),
+          ]).animate().fadeIn(delay: 400.ms),
 
-                  StepUpInput(
-                    label: 'Password',
-                    hint: '••••••••',
-                    controller: passCtrl,
-                    obscureText: true,
-                    errorText: passErr,
-                    prefixIcon: const Icon(Icons.lock_outline, size: AppSpacing.iconMd),
-                    autofillHints: const [AutofillHints.password],
-                    onSubmitted: (_) => onLogin(),
-                  ).animate().fadeIn(delay: 220.ms),
+          const SizedBox(height: AppSpacing.base),
 
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: onForgot,
-                      style: TextButton.styleFrom(padding: EdgeInsets.zero),
-                      child: Text('Forgot Password?',
-                          style: GoogleFonts.inter(
-                              fontSize: 13, color: AppColors.brand, fontWeight: FontWeight.w500)),
+          // Google button
+          _GoogleButton(onPressed: onGoogleSignIn).animate().fadeIn(delay: 450.ms),
+
+          const SizedBox(height: AppSpacing.xl),
+
+          Center(
+            child: GestureDetector(
+              onTap: onSignUp,
+              child: RichText(
+                text: TextSpan(
+                  style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary),
+                  children: [
+                    const TextSpan(text: "Don't have an account? "),
+                    TextSpan(
+                      text: 'Sign Up',
+                      style: GoogleFonts.inter(
+                          fontSize: 14, color: AppColors.brand,
+                          fontWeight: FontWeight.w600),
                     ),
-                  ).animate().fadeIn(delay: 290.ms),
-
-                  const SizedBox(height: AppSpacing.sm),
-
-                  StepUpButton(label: 'Login', isLoading: isLoading, onPressed: onLogin)
-                      .animate().fadeIn(delay: 350.ms),
-
-                  const SizedBox(height: AppSpacing.base),
-
-                  // Divider
-                  Row(children: [
-                    const Expanded(child: Divider(color: AppColors.border)),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                      child: Text('or', style: GoogleFonts.inter(fontSize: 13, color: AppColors.textMuted)),
-                    ),
-                    const Expanded(child: Divider(color: AppColors.border)),
-                  ]).animate().fadeIn(delay: 400.ms),
-
-                  const SizedBox(height: AppSpacing.base),
-
-                  // Google button
-                  _GoogleButton(onPressed: onGoogleSignIn).animate().fadeIn(delay: 450.ms),
-
-                  const SizedBox(height: AppSpacing.xl),
-
-                  Center(
-                    child: GestureDetector(
-                      onTap: onSignUp,
-                      child: RichText(
-                        text: TextSpan(
-                          style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary),
-                          children: [
-                            const TextSpan(text: "Don't have an account? "),
-                            TextSpan(
-                              text: 'Sign Up',
-                              style: GoogleFonts.inter(
-                                  fontSize: 14, color: AppColors.brand,
-                                  fontWeight: FontWeight.w600),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ).animate().fadeIn(delay: 500.ms),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
+          ).animate().fadeIn(delay: 500.ms),
         ],
       ),
     );

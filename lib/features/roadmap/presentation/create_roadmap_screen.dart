@@ -12,7 +12,6 @@ import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/storage/token_storage.dart';
-import '../../../shared/providers/auth_provider.dart';
 import '../../../shared/providers/roadmap_provider.dart';
 import '../../../shared/widgets/stepup_button.dart';
 import '../../../shared/widgets/stepup_input.dart';
@@ -64,9 +63,9 @@ class _ProofTypeCycleChip extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.15),
+          color: color.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color.withOpacity(0.6), width: 1),
+          border: Border.all(color: color.withValues(alpha: 0.6), width: 1),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -82,7 +81,7 @@ class _ProofTypeCycleChip extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 4),
-            Icon(Icons.swap_horiz_rounded, size: 12, color: color.withOpacity(0.7)),
+            Icon(Icons.swap_horiz_rounded, size: 12, color: color.withValues(alpha: 0.7)),
           ],
         ),
       ),
@@ -756,7 +755,7 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
                             color: isSelected ? Colors.transparent : const Color(0xFF1E1E2E),
                           ),
                           boxShadow: isSelected ? [
-                            BoxShadow(color: AppColors.brand.withOpacity(0.3), blurRadius: 8),
+                            BoxShadow(color: AppColors.brand.withValues(alpha: 0.3), blurRadius: 8),
                           ] : null,
                         ),
                         child: Text('$emoji  $label',
@@ -1001,7 +1000,7 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
                     border: Border.all(
                         color: isSelected ? Colors.transparent : const Color(0xFF1E1E2E)),
                     boxShadow: isSelected
-                        ? [BoxShadow(color: AppColors.brand.withOpacity(0.35), blurRadius: 12)]
+                        ? [BoxShadow(color: AppColors.brand.withValues(alpha: 0.35), blurRadius: 12)]
                         : null,
                   ),
                   child: Row(
@@ -1150,7 +1149,7 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
                   border: Border.all(
                       color: isSelected ? Colors.transparent : const Color(0xFF1E1E2E)),
                   boxShadow: isSelected
-                      ? [BoxShadow(color: AppColors.brand.withOpacity(0.3), blurRadius: 12)]
+                      ? [BoxShadow(color: AppColors.brand.withValues(alpha: 0.3), blurRadius: 12)]
                       : null,
                 ),
                 child: Row(
@@ -1158,7 +1157,7 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
                     Container(
                       width: 44, height: 44,
                       decoration: BoxDecoration(
-                        color: isSelected ? Colors.white.withOpacity(0.2) : AppColors.brand.withOpacity(0.1),
+                        color: isSelected ? Colors.white.withValues(alpha: 0.2) : AppColors.brand.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Icon(icon,
@@ -1175,7 +1174,7 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
                           Text(desc,
                               style: GoogleFonts.inter(fontSize: 12,
                                   color: isSelected
-                                      ? Colors.white.withOpacity(0.75)
+                                      ? Colors.white.withValues(alpha: 0.75)
                                       : AppColors.textMuted)),
                         ],
                       ),
@@ -1241,7 +1240,7 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
                   border: Border.all(
                       color: isSelected ? Colors.transparent : const Color(0xFF1E1E2E)),
                   boxShadow: isSelected
-                      ? [BoxShadow(color: AppColors.brand.withOpacity(0.3), blurRadius: 12)]
+                      ? [BoxShadow(color: AppColors.brand.withValues(alpha: 0.3), blurRadius: 12)]
                       : null,
                 ),
                 child: Row(
@@ -1258,7 +1257,7 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
                           Text(desc,
                               style: GoogleFonts.inter(fontSize: 12,
                                   color: isSelected
-                                      ? Colors.white.withOpacity(0.75)
+                                      ? Colors.white.withValues(alpha: 0.75)
                                       : AppColors.textMuted)),
                         ],
                       ),
@@ -1328,7 +1327,7 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
             decoration: BoxDecoration(
               color: const Color(0xFF12121A),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.brand.withOpacity(0.3)),
+              border: Border.all(color: AppColors.brand.withValues(alpha: 0.3)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1403,7 +1402,7 @@ class _MapStyleCard extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppColors.brand.withOpacity(0.12)
+              ? AppColors.brand.withValues(alpha: 0.12)
               : const Color(0xFF12121A),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
@@ -1411,7 +1410,7 @@ class _MapStyleCard extends StatelessWidget {
             width: isSelected ? 1.5 : 1,
           ),
           boxShadow: isSelected
-              ? [BoxShadow(color: AppColors.brand.withOpacity(0.2), blurRadius: 12)]
+              ? [BoxShadow(color: AppColors.brand.withValues(alpha: 0.2), blurRadius: 12)]
               : null,
         ),
         child: Column(
@@ -1578,7 +1577,7 @@ class _ManualLevelTile extends StatelessWidget {
                 const SizedBox(width: 8),
                 CircleAvatar(
                   radius: 12,
-                  backgroundColor: AppColors.brand.withOpacity(0.15),
+                  backgroundColor: AppColors.brand.withValues(alpha: 0.15),
                   child: Text(
                     '${index + 1}',
                     style: GoogleFonts.syne(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.brand),
@@ -1645,7 +1644,7 @@ class _ManualLevelTile extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.add_circle_outline, size: 14, color: AppColors.brand.withOpacity(0.8)),
+                        Icon(Icons.add_circle_outline, size: 14, color: AppColors.brand.withValues(alpha: 0.8)),
                         const SizedBox(width: 6),
                         Text(
                           '+ Add Sub-topic',
@@ -1694,7 +1693,7 @@ class _SubLevelRow extends StatelessWidget {
               label,
               style: GoogleFonts.spaceMono(
                 fontSize: 10,
-                color: AppColors.brand.withOpacity(0.8),
+                color: AppColors.brand.withValues(alpha: 0.8),
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -1752,7 +1751,7 @@ class _WizardChip extends StatelessWidget {
           color: isSelected ? Colors.transparent : const Color(0xFF1E1E2E),
         ),
         boxShadow: isSelected
-            ? [BoxShadow(color: AppColors.brand.withOpacity(0.3), blurRadius: 8)]
+            ? [BoxShadow(color: AppColors.brand.withValues(alpha: 0.3), blurRadius: 8)]
             : null,
       ),
       child: Row(

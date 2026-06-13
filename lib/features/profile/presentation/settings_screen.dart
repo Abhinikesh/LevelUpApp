@@ -396,286 +396,304 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.bgDark,
-      body: CustomScrollView(
-        slivers: [
-          // Header
-          SliverAppBar(
-            pinned: true,
-            backgroundColor: AppColors.bgDark,
-            leading: GestureDetector(
-              onTap: () => Navigator.pop(context),
-              child: Container(
-                margin: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.bgCard,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: const Icon(Icons.arrow_back_ios_new,
-                    color: AppColors.textPrimary, size: 16),
+      body: Column(
+        children: [
+          // Header Bar
+          SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: AppColors.bgCard,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: const Icon(Icons.arrow_back_ios_new,
+                          color: AppColors.textPrimary, size: 16),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Settings',
+                    style: GoogleFonts.syne(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ],
               ),
             ),
-            title: Text('Settings',
-                style: GoogleFonts.syne(
-                    fontSize: 20, fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary)),
           ),
-
-          SliverList(
-            delegate: SliverChildListDelegate([
-              // ── Account ─────────────────────────────────
-              _Section(
-                title: 'Account',
+          // Scrollable Settings Content
+          Expanded(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
                 children: [
-                  _TileItem(
-                    icon: Icons.person_outline,
-                    label: 'Edit Profile',
-                    subtitle: user?.name ?? 'Set your name',
-                    onTap: () {},
-                  ),
-                  _TileItem(
-                    icon: Icons.lock_outline,
-                    label: 'Change Password',
-                    onTap: () {},
-                  ),
-                  _TileItem(
-                    icon: Icons.email_outlined,
-                    label: 'Email',
-                    subtitle: user?.email ?? '—',
-                    trailing: const SizedBox.shrink(),
-                  ),
-                ],
-              ),
-
-              // ── Notifications ───────────────────────────
-              _Section(
-                title: 'Notifications',
-                children: [
-                  _ToggleItem(
-                    icon: Icons.local_fire_department_outlined,
-                    label: 'Streak Reminders',
-                    value: _streakReminders,
-                    onChanged: (v) => setState(() => _streakReminders = v),
-                  ),
-                  _ToggleItem(
-                    icon: Icons.calendar_today_outlined,
-                    label: 'Deadline Warnings',
-                    value: _deadlineWarnings,
-                    onChanged: (v) => setState(() => _deadlineWarnings = v),
-                  ),
-                  _ToggleItem(
-                    icon: Icons.people_outline,
-                    label: 'Friend Activity',
-                    value: _friendActivity,
-                    onChanged: (v) => setState(() => _friendActivity = v),
-                  ),
-                  _ToggleItem(
-                    icon: Icons.bar_chart_outlined,
-                    label: 'Weekly Summary',
-                    value: _weeklySummary,
-                    onChanged: (v) => setState(() => _weeklySummary = v),
-                  ),
-                ],
-              ),
-
-              // ── Appearance ──────────────────────────────
-              _Section(
-                title: 'Appearance',
-                children: [
-                  _TileItem(
-                    icon: Icons.map_outlined,
-                    label: 'Map Theme',
-                    subtitle: _themeName(_currentThemeIndex),
-                    onTap: _showThemeSheet,
-                  ),
-                  _TileItem(
-                    icon: Icons.palette_outlined,
-                    label: 'App Accent Theme',
-                    subtitle: activeTheme.name,
-                    onTap: () => _showAppThemeSheet(context, ref, activeTheme),
-                  ),
-                  _buildDisplayModeSelector(context, ref, activeMode),
-                ],
-              ),
-
-              // ── App ──────────────────────────────────────
-              _Section(
-                title: 'App',
-                children: [
-                  _TileItem(
-                    icon: Icons.offline_bolt_outlined,
-                    label: 'Offline Mode',
-                    subtitle: 'Data syncs when online',
-                    trailing: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: AppColors.green.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                            color: AppColors.green.withValues(alpha: 0.3)),
+                  // ── Account ─────────────────────────────────
+                  _Section(
+                    title: 'Account',
+                    children: [
+                      _TileItem(
+                        icon: Icons.person_outline,
+                        label: 'Edit Profile',
+                        subtitle: user?.name ?? 'Set your name',
+                        onTap: () {},
                       ),
-                      child: Text('Enabled',
-                          style: GoogleFonts.inter(
-                              fontSize: 11, color: AppColors.green)),
-                    ),
-                  ),
-                  _TileItem(
-                    icon: Icons.delete_sweep_outlined,
-                    label: 'Clear Cache',
-                    onTap: () => _showSnack('Cache cleared!'),
-                  ),
-                  _TileItem(
-                    icon: Icons.download_outlined,
-                    label: 'Export My Data',
-                    onTap: () => _showSnack('Data export started!'),
-                  ),
-                ],
-              ),
-
-              // ── AI Powered (✅ Grok AI powered, no key needed) ───────────
-              _Section(
-                title: 'AI Engine',
-                children: [
-                  Container(
-                    margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [AppColors.brand.withValues(alpha: 0.12), const Color(0xFF12121A)],
+                      _TileItem(
+                        icon: Icons.lock_outline,
+                        label: 'Change Password',
+                        onTap: () {},
                       ),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.brand.withValues(alpha: 0.35)),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 44, height: 44,
+                      _TileItem(
+                        icon: Icons.email_outlined,
+                        label: 'Email',
+                        subtitle: user?.email ?? '—',
+                        trailing: const SizedBox.shrink(),
+                      ),
+                    ],
+                  ),
+
+                  // ── Notifications ───────────────────────────
+                  _Section(
+                    title: 'Notifications',
+                    children: [
+                      _ToggleItem(
+                        icon: Icons.local_fire_department_outlined,
+                        label: 'Streak Reminders',
+                        value: _streakReminders,
+                        onChanged: (v) => setState(() => _streakReminders = v),
+                      ),
+                      _ToggleItem(
+                        icon: Icons.calendar_today_outlined,
+                        label: 'Deadline Warnings',
+                        value: _deadlineWarnings,
+                        onChanged: (v) => setState(() => _deadlineWarnings = v),
+                      ),
+                      _ToggleItem(
+                        icon: Icons.people_outline,
+                        label: 'Friend Activity',
+                        value: _friendActivity,
+                        onChanged: (v) => setState(() => _friendActivity = v),
+                      ),
+                      _ToggleItem(
+                        icon: Icons.bar_chart_outlined,
+                        label: 'Weekly Summary',
+                        value: _weeklySummary,
+                        onChanged: (v) => setState(() => _weeklySummary = v),
+                      ),
+                    ],
+                  ),
+
+                  // ── Appearance ──────────────────────────────
+                  _Section(
+                    title: 'Appearance',
+                    children: [
+                      _TileItem(
+                        icon: Icons.map_outlined,
+                        label: 'Map Theme',
+                        subtitle: _themeName(_currentThemeIndex),
+                        onTap: _showThemeSheet,
+                      ),
+                      _TileItem(
+                        icon: Icons.palette_outlined,
+                        label: 'App Accent Theme',
+                        subtitle: activeTheme.name,
+                        onTap: () => _showAppThemeSheet(context, ref, activeTheme),
+                      ),
+                      _buildDisplayModeSelector(context, ref, activeMode),
+                    ],
+                  ),
+
+                  // ── App ──────────────────────────────────────
+                  _Section(
+                    title: 'App',
+                    children: [
+                      _TileItem(
+                        icon: Icons.offline_bolt_outlined,
+                        label: 'Offline Mode',
+                        subtitle: 'Data syncs when online',
+                        trailing: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            gradient: AppColors.brandGradient,
-                            borderRadius: BorderRadius.circular(12),
+                            color: AppColors.green.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                                color: AppColors.green.withValues(alpha: 0.3)),
                           ),
-                          child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 22),
+                          child: Text('Enabled',
+                              style: GoogleFonts.inter(
+                                  fontSize: 11, color: AppColors.green)),
                         ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Grok AI — Active', style: GoogleFonts.spaceMono(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.brand)),
-                              const SizedBox(height: 3),
-                              Text('Personalized roadmaps powered by xAI Grok. No API key required.', style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary)),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ).animate().fadeIn(delay: 250.ms),
-                ],
-              ),
-
-              // ── Plan ──────────────────────────────────
-              _Section(
-                title: 'Your Plan',
-                children: [
-                  Container(
-                    margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          AppColors.brand.withValues(alpha: 0.15),
-                          AppColors.bgCard,
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
                       ),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                          color: AppColors.brand.withValues(alpha: 0.5),
-                          width: 1.5),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+                      _TileItem(
+                        icon: Icons.delete_sweep_outlined,
+                        label: 'Clear Cache',
+                        onTap: () => _showSnack('Cache cleared!'),
+                      ),
+                      _TileItem(
+                        icon: Icons.download_outlined,
+                        label: 'Export My Data',
+                        onTap: () => _showSnack('Data export started!'),
+                      ),
+                    ],
+                  ),
+
+                  // ── AI Powered (✅ Grok AI powered, no key needed) ───────────
+                  _Section(
+                    title: 'AI Engine',
+                    children: [
+                      Container(
+                        margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [AppColors.brand.withValues(alpha: 0.12), const Color(0xFF12121A)],
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: AppColors.brand.withValues(alpha: 0.35)),
+                        ),
+                        child: Row(
                           children: [
-                            const Text('\u2705', style: TextStyle(fontSize: 18)),
-                            const SizedBox(width: 8),
-                            Text('All Features Unlocked',
-                                style: GoogleFonts.syne(
-                                    fontSize: 16, fontWeight: FontWeight.w800,
-                                    color: AppColors.brand)),
+                            Container(
+                              width: 44, height: 44,
+                              decoration: BoxDecoration(
+                                gradient: AppColors.brandGradient,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 22),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Grok AI — Active', style: GoogleFonts.spaceMono(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.brand)),
+                                  const SizedBox(height: 3),
+                                  Text('Personalized roadmaps powered by xAI Grok. No API key required.', style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary)),
+                                ],
+                              ),
+                            ),
                           ],
                         ),
-                        const SizedBox(height: 10),
-                        ...[
-                          '\u2713 Unlimited roadmaps',
-                          '\u2713 Grok AI generation — no key needed',
-                          '\u2713 AI Coach — unlimited messages',
-                          '\u2713 Advanced analytics & badges',
-                        ].map((f) => Padding(
-                              padding: const EdgeInsets.only(bottom: 4),
-                              child: Text(f,
-                                  style: GoogleFonts.inter(
-                                      fontSize: 13,
-                                      color: AppColors.textSecondary)),
-                            )),
-                      ],
+                      ).animate().fadeIn(delay: 250.ms),
+                    ],
+                  ),
+
+                  // ── Plan ──────────────────────────────────
+                  _Section(
+                    title: 'Your Plan',
+                    children: [
+                      Container(
+                        margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              AppColors.brand.withValues(alpha: 0.15),
+                              AppColors.bgCard,
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                              color: AppColors.brand.withValues(alpha: 0.5),
+                              width: 1.5),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Text('✅', style: TextStyle(fontSize: 18)),
+                                const SizedBox(width: 8),
+                                Text('All Features Unlocked',
+                                    style: GoogleFonts.syne(
+                                        fontSize: 16, fontWeight: FontWeight.w800,
+                                        color: AppColors.brand)),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            ...[
+                              '✓ Unlimited roadmaps',
+                              '✓ Grok AI generation — no key needed',
+                              '✓ AI Coach — unlimited messages',
+                              '✓ Advanced analytics & badges',
+                            ].map((f) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Text(f,
+                                      style: GoogleFonts.inter(
+                                          fontSize: 13,
+                                          color: AppColors.textSecondary)),
+                                )),
+                          ],
+                        ),
+                      ).animate().fadeIn(delay: 300.ms),
+                    ],
+                  ),
+
+                  // ── About ────────────────────────────────────
+                  _Section(
+                    title: 'About',
+                    children: [
+                      _TileItem(
+                        icon: Icons.info_outline,
+                        label: 'App Version',
+                        trailing: Text('1.0.0',
+                            style: GoogleFonts.inter(
+                                fontSize: 13, color: AppColors.textMuted)),
+                      ),
+                      _TileItem(
+                        icon: Icons.description_outlined,
+                        label: 'Terms of Service',
+                        onTap: () {},
+                      ),
+                      _TileItem(
+                        icon: Icons.privacy_tip_outlined,
+                        label: 'Privacy Policy',
+                        onTap: () {},
+                      ),
+                      _TileItem(
+                        icon: Icons.star_outline,
+                        label: 'Rate the App',
+                        onTap: () {},
+                      ),
+                    ],
+                  ),
+
+                  // ── Danger Zone ───────────────────────────────
+                  Container(
+                    margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: AppColors.error.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: AppColors.error.withValues(alpha: 0.2),
+                      ),
                     ),
-                  ).animate().fadeIn(delay: 300.ms),
+                    child: _TileItem(
+                      icon: Icons.delete_forever_outlined,
+                      label: 'Delete Account',
+                      color: AppColors.error,
+                      onTap: () => _confirmDelete(context),
+                    ),
+                  ),
+
+                  const SizedBox(height: 140),
                 ],
               ),
-
-              // ── About ────────────────────────────────────
-              _Section(
-                title: 'About',
-                children: [
-                  _TileItem(
-                    icon: Icons.info_outline,
-                    label: 'App Version',
-                    trailing: Text('1.0.0',
-                        style: GoogleFonts.inter(
-                            fontSize: 13, color: AppColors.textMuted)),
-                  ),
-                  _TileItem(
-                    icon: Icons.description_outlined,
-                    label: 'Terms of Service',
-                    onTap: () {},
-                  ),
-                  _TileItem(
-                    icon: Icons.privacy_tip_outlined,
-                    label: 'Privacy Policy',
-                    onTap: () {},
-                  ),
-                  _TileItem(
-                    icon: Icons.star_outline,
-                    label: 'Rate the App',
-                    onTap: () {},
-                  ),
-                ],
-              ),
-
-              // ── Danger Zone ───────────────────────────────
-              Container(
-                margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: AppColors.error.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                      color: AppColors.error.withValues(alpha: 0.2)),
-                ),
-                child: _TileItem(
-                  icon: Icons.delete_forever_outlined,
-                  label: 'Delete Account',
-                  color: AppColors.error,
-                  onTap: () => _confirmDelete(context),
-                ),
-              ),
-
-              const SizedBox(height: 140),
-            ]),
+            ),
           ),
         ],
       ),
