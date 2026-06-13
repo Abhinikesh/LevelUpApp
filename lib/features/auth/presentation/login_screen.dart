@@ -64,25 +64,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       );
       final account = await googleSignIn.signIn();
       if (account != null) {
-        final email = account.email;
-        final name = account.displayName ?? _nameFromEmail(email);
-        const password = 'GoogleSignInPasswordSecret123!';
-        
-        final ok = await ref.read(authProvider.notifier).login(email, password);
-        if (!ok && mounted) {
-          final regOk = await ref.read(authProvider.notifier).register(
-            name: name,
-            email: email,
-            password: password,
-          );
-          if (regOk && mounted) {
+        final auth = await account.authentication;
+        final idToken = auth.idToken;
+
+        // If in Demo Mode and idToken is null, use a mock token to log in instantly.
+        // Otherwise, require the real idToken to authenticate against the backend.
+        final isDemo = ApiConstants.baseUrl.isEmpty;
+        final finalToken = idToken ?? (isDemo ? 'mock-google-id-token' : null);
+
+        if (finalToken != null) {
+          final ok = await ref.read(authProvider.notifier).loginWithGoogle(finalToken);
+          if (ok && mounted) {
             context.go(AppRoutes.dashboard);
           } else if (mounted) {
             final err = ref.read(authProvider).error;
-            _showErrorSnack(err ?? 'Google Sign-In registration failed.');
+            _showErrorSnack(err ?? 'Google Sign-In failed.');
           }
-        } else if (mounted) {
-          context.go(AppRoutes.dashboard);
+        } else {
+          if (mounted) {
+            _showGoogleConfigModal();
+          }
         }
       }
     } catch (e) {

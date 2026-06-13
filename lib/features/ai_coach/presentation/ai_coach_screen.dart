@@ -1,9 +1,12 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../core/constants/api_constants.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/storage/token_storage.dart';
 import '../../../shared/providers/auth_provider.dart';
 
 class AICoachScreen extends ConsumerStatefulWidget {
@@ -17,6 +20,8 @@ class _AICoachScreenState extends ConsumerState<AICoachScreen> {
   final _scrollCtrl = ScrollController();
   bool _isTyping = false;
   final List<_ChatMessage> _messages = [];
+  // Parallel message history for API
+  final List<Map<String, dynamic>> _apiMessages = [];
 
   @override
   void initState() {
@@ -43,27 +48,71 @@ class _AICoachScreenState extends ConsumerState<AICoachScreen> {
 
   Future<void> _send([String? preText]) async {
     final text = (preText ?? _textCtrl.text).trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty || _isTyping) return;
     _textCtrl.clear();
 
     setState(() {
       _messages.add(_ChatMessage(text: text, isUser: true, suggestions: []));
       _isTyping = true;
     });
+    _apiMessages.add({'role': 'user', 'content': text});
     _scrollDown();
 
-    // Simulate ARIA response
-    await Future.delayed(const Duration(milliseconds: 1200));
-    final response = _generateAriaResponse(text);
-    if (!mounted) return;
-    setState(() {
-      _isTyping = false;
-      _messages.add(_ChatMessage(
-          text: response,
-          isUser: false,
-          suggestions: _suggestionsFor(text)));
-    });
-    _scrollDown();
+    try {
+      final token = await TokenStorage.getToken();
+      if (token == null || token.isEmpty) throw Exception('no_token');
+
+      final dio = Dio(BaseOptions(
+        connectTimeout: const Duration(seconds: 20),
+        receiveTimeout: const Duration(seconds: 30),
+      ));
+
+      // Keep last 20 messages to avoid token overflow
+      final trimmedMsgs = _apiMessages.length > 20
+          ? _apiMessages.sublist(_apiMessages.length - 20)
+          : List<Map<String, dynamic>>.from(_apiMessages);
+
+      final response = await dio.post(
+        '${ApiConstants.baseUrl}${ApiConstants.coachChat}',
+        options: Options(
+          headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
+        ),
+        data: {'messages': trimmedMsgs},
+      );
+
+      final data = response.data as Map<String, dynamic>;
+      if (data['success'] == true) {
+        final reply = data['reply'] as String? ?? 'I had trouble responding. Try again!';
+        final suggestions = (data['suggestedActions'] as List<dynamic>?)
+            ?.map((e) => e.toString())
+            .take(3)
+            .toList() ?? [];
+
+        // Add AI response to API history
+        _apiMessages.add({'role': 'assistant', 'content': reply});
+
+        if (!mounted) return;
+        setState(() {
+          _isTyping = false;
+          _messages.add(_ChatMessage(text: reply, isUser: false, suggestions: suggestions));
+        });
+        _scrollDown();
+        return;
+      }
+      throw Exception('Backend error: ${data['message']}');
+    } catch (_) {
+      // Fallback: local mock response
+      await Future.delayed(const Duration(milliseconds: 800));
+      final response = _generateAriaResponse(text);
+      final suggestions = _suggestionsFor(text);
+      _apiMessages.add({'role': 'assistant', 'content': response});
+      if (!mounted) return;
+      setState(() {
+        _isTyping = false;
+        _messages.add(_ChatMessage(text: response, isUser: false, suggestions: suggestions));
+      });
+      _scrollDown();
+    }
   }
 
   void _scrollDown() {

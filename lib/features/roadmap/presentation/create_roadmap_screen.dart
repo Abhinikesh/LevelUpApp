@@ -1,16 +1,18 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/constants/api_constants.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/storage/token_storage.dart';
+import '../../../shared/providers/auth_provider.dart';
 import '../../../shared/providers/roadmap_provider.dart';
 import '../../../shared/widgets/stepup_button.dart';
 import '../../../shared/widgets/stepup_input.dart';
@@ -135,47 +137,56 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
   final _titleCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
 
-  // AI Goal inputs
-  final _aiGoalTitleCtrl = TextEditingController();
-  final _aiGoalDescCtrl = TextEditingController();
+  // ─── Wizard (AI Generate Tab) ─────────────────────────────────
+  final _wizardPageCtrl = PageController();
+  int _wizardStep = 0;
+  String? _wizardSkill; // python|dsa|mern|flutter|gym|aiml|work|custom
+  final _customSkillCtrl = TextEditingController();
+  int _wizardDays = 30;
+  bool _useCustomDays = false;
+  final _customDaysCtrl = TextEditingController();
+  String _wizardTime = '1h'; // 30min|1h|2h|3h+
+  String _wizardLevel = 'beginner';
+  String _wizardStyle = 'mixed';
 
+  // ─── Loading ─────────────────────────────────────────────
+  bool _isGeneratingAI = false;
+  bool _isCreating = false;
+  int _loadingMsgIdx = 0;
+  Timer? _loadingTimer;
+
+  final _loadingMessages = [
+    'Sending to Grok AI... 🧠',
+    'Building your roadmap... 🗺️',
+    'Crafting milestones... 🏆',
+    'Almost ready! ✨',
+  ];
+
+  // ─── Manual Tab State ────────────────────────────────────
   String _selectedType = 'study';
   String _mapStyle = 'simple'; // 'simple' or 'sublevels'
   bool _examMode = false;
   DateTime? _deadline;
   String _titleError = '';
-  String _aiTitleError = '';
-
-  // Manual Levels
-  final List<_ManualLevel> _manualLevels = [
-    _ManualLevel(title: 'Level 1: Introduction', proofType: 'quiz')
-  ];
-
-  // AI Loading & Preview States
-  bool _isGeneratingAI = false;
-  bool _isCreating = false;
-  int _loadingMsgIdx = 0;
-  Timer? _loadingTimer;
-  List<Map<String, dynamic>>? _generatedLevelsPreview;
-  final List<TextEditingController> _previewControllers = [];
 
   final _types = [
-    ('study', '📚', 'Study'),
-    ('gym', '💪', 'Fitness'),
-    ('work', '💼', 'Work'),
-    ('custom', '🎯', 'Custom'),
+    ('study', '\ud83d\udcda', 'Study'),
+    ('gym', '\ud83d\udcaa', 'Fitness'),
+    ('work', '\ud83d\udcbc', 'Work'),
+    ('custom', '\ud83c\udfaf', 'Custom'),
   ];
 
-  final _loadingMessages = [
-    "Analyzing your goal... 🧠",
-    "Building level map... 🏗️",
-    "Almost ready... ✨",
+  final List<_ManualLevel> _manualLevels = [
+    _ManualLevel(title: 'Level 1: Introduction', proofType: 'quiz'),
   ];
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    // Trigger rebuild when custom text changes (to enable/disable Next button)
+    _customSkillCtrl.addListener(() => setState(() {}));
+    _customDaysCtrl.addListener(() => setState(() {}));
   }
 
   @override
@@ -183,21 +194,14 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
     _tabController.dispose();
     _titleCtrl.dispose();
     _descCtrl.dispose();
-    _aiGoalTitleCtrl.dispose();
-    _aiGoalDescCtrl.dispose();
+    _wizardPageCtrl.dispose();
+    _customSkillCtrl.dispose();
+    _customDaysCtrl.dispose();
     for (final l in _manualLevels) {
       l.dispose();
     }
-    _clearPreviewControllers();
     _loadingTimer?.cancel();
     super.dispose();
-  }
-
-  void _clearPreviewControllers() {
-    for (final ctrl in _previewControllers) {
-      ctrl.dispose();
-    }
-    _previewControllers.clear();
   }
 
   Future<void> _pickDeadline() async {
@@ -338,157 +342,139 @@ class _CreateRoadmapScreenState extends ConsumerState<CreateRoadmapScreen>
     return levels;
   }
 
-  Future<void> _generateAI() async {
-    final title = _aiGoalTitleCtrl.text.trim();
-    if (title.isEmpty) {
-      setState(() => _aiTitleError = 'Goal Title is required');
-      return;
+  // ─── Wizard state helpers ────────────────────────────────────
+  String _wizardSkillLabel() {
+    const labels = {
+      'python': 'Python Programming',
+      'dsa': 'Data Structures & Algorithms',
+      'mern': 'MERN Stack',
+      'flutter': 'Flutter Development',
+      'gym': 'Gym & Fitness',
+      'aiml': 'AI & Machine Learning',
+      'work': 'Work Project',
+    };
+    if (_wizardSkill == 'custom') {
+      return _customSkillCtrl.text.trim().isNotEmpty
+          ? _customSkillCtrl.text.trim()
+          : 'Custom Goal';
     }
+    return labels[_wizardSkill] ?? 'My Goal';
+  }
+
+  String _buildUserInput() {
+    const timeLabels = {
+      '30min': '30 minutes',
+      '1h': '1 hour',
+      '2h': '2 hours',
+      '3h+': '3+ hours',
+    };
+    const levelLabels = {
+      'beginner': 'a complete beginner',
+      'some': 'someone with some basic knowledge',
+      'intermediate': 'an intermediate level learner',
+      'advanced': 'an advanced level learner',
+    };
+    const styleLabels = {
+      'project': 'project-based, hands-on learning',
+      'theory': 'theory-first, then practice',
+      'mixed': 'a balanced mix of theory and practice',
+      'fasttrack': 'fast-track intensive, skip basics and go deep',
+    };
+    final days = _useCustomDays
+        ? (int.tryParse(_customDaysCtrl.text.trim()) ?? _wizardDays)
+        : _wizardDays;
+    final skill = _wizardSkillLabel();
+    final time = timeLabels[_wizardTime] ?? '1 hour';
+    final level = levelLabels[_wizardLevel] ?? 'a beginner';
+    final style = styleLabels[_wizardStyle] ?? 'a mixed approach';
+    return 'I want to master $skill in $days days. '
+        'I can dedicate $time per day. '
+        'I am $level. '
+        'I prefer $style. '
+        'Create a detailed, practical roadmap with specific milestones.';
+  }
+
+  String _mapSkillToType() {
+    if (_wizardSkill == 'gym') return 'gym';
+    if (_wizardSkill == 'work') return 'work';
+    return 'study';
+  }
+
+  // ─── AI Generation ─────────────────────────────────────────
+  Future<void> _runAIGeneration() async {
     setState(() {
-      _aiTitleError = '';
       _isGeneratingAI = true;
       _loadingMsgIdx = 0;
     });
-
-    _loadingTimer = Timer.periodic(const Duration(milliseconds: 1000), (timer) {
+    _loadingTimer = Timer.periodic(const Duration(milliseconds: 1500), (t) {
       if (mounted && _isGeneratingAI) {
-        setState(() {
-          _loadingMsgIdx = (_loadingMsgIdx + 1) % _loadingMessages.length;
-        });
+        setState(() => _loadingMsgIdx = (_loadingMsgIdx + 1) % _loadingMessages.length);
       }
     });
-
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final apiKey = prefs.getString('openai_api_key') ?? '';
+      final userInput = _buildUserInput();
+      final type = _mapSkillToType();
+      final token = await TokenStorage.getToken();
 
-      if (apiKey.isNotEmpty) {
-        final openAiDio = Dio(BaseOptions(
-          connectTimeout: const Duration(seconds: 20),
-          receiveTimeout: const Duration(seconds: 30),
-        ));
-        final prompt = '''
-You are a professional learning-path designer. Create a structured roadmap for: "$title".
-Description/context: "${_aiGoalDescCtrl.text.trim()}".
-Type: $_selectedType.
-
-Return ONLY valid JSON with this exact shape — no markdown, no explanation:
-{
-  "levels": [
-    {
-      "levelNumber": 1,
-      "title": "...",
-      "description": "...",
-      "proofType": "quiz|timer|code",
-      "estimatedMinutes": 45,
-      "xpReward": 100
-    }
-  ]
-}
-
-Rules:
-- Between 6 and 12 levels
-- Titles must be specific and actionable (no generic "Introduction" alone)
-- proofType: quiz for theory, code for coding tasks, timer for physical/time-based tasks
-- xpReward: 100 for easy, 150 for medium, 200-300 for hard/final levels
-''';
-        final aiResponse = await openAiDio.post(
-          'https://api.openai.com/v1/chat/completions',
-          options: Options(
-            headers: {
-              'Authorization': 'Bearer $apiKey',
-              'Content-Type': 'application/json',
-            },
-          ),
-          data: {
-            'model': 'gpt-4o-mini',
-            'messages': [
-              {'role': 'system', 'content': 'You are a concise JSON-only API. Return only valid JSON.'},
-              {'role': 'user', 'content': prompt},
-            ],
-            'temperature': 0.7,
-            'max_tokens': 2000,
+      final aoDio = Dio(BaseOptions(
+        connectTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(seconds: 90),
+      ));
+      final response = await aoDio.post(
+        '${ApiConstants.baseUrl}${ApiConstants.generateRoadmap}',
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
           },
-        );
-        final content = aiResponse.data['choices'][0]['message']['content'] as String;
-        final cleaned = content
-            .replaceAll('```json', '')
-            .replaceAll('```', '')
-            .trim();
-        final parsed = jsonDecode(cleaned) as Map<String, dynamic>;
-        final levels = (parsed['levels'] as List<dynamic>)
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList();
-
-        setState(() {
-          _isGeneratingAI = false;
-          _generatedLevelsPreview = levels;
-          _clearPreviewControllers();
-          for (final lvl in levels) {
-            _previewControllers
-                .add(TextEditingController(text: lvl['title']));
-          }
-        });
+        ),
+        data: {'userInput': userInput, 'type': type},
+      );
+      if (!mounted) return;
+      final data = response.data as Map<String, dynamic>;
+      if (data['success'] == true) {
+        final roadmapMap = data['roadmap'] as Map<String, dynamic>;
+        final roadmapId = roadmapMap['_id'] as String;
+        _loadingTimer?.cancel();
+        setState(() => _isGeneratingAI = false);
+        context.go('${AppRoutes.map}/$roadmapId');
         return;
       }
-
-      throw Exception('no_key');
+      throw Exception(data['message'] ?? 'Generation failed');
     } catch (_) {
-      await Future.delayed(const Duration(milliseconds: 800));
-      final levels = _generateSmartRoadmap(
-        _aiGoalTitleCtrl.text.trim(), _aiGoalDescCtrl.text.trim(), _selectedType);
-      if (mounted) {
-        setState(() {
-          _isGeneratingAI = false;
-          _generatedLevelsPreview = levels;
-          _clearPreviewControllers();
-          for (final lvl in levels) {
-            _previewControllers
-                .add(TextEditingController(text: lvl['title'] as String));
-          }
-        });
-      }
+      // Fallback: local template + createRoadmap
+      await _fallbackLocalGenerate();
     } finally {
       _loadingTimer?.cancel();
+      if (mounted) setState(() => _isGeneratingAI = false);
     }
   }
 
-  Future<void> _saveAI() async {
-    if (_generatedLevelsPreview == null) return;
-    setState(() => _isCreating = true);
-
-    final title = _aiGoalTitleCtrl.text.trim();
-    final description = _aiGoalDescCtrl.text.trim();
-
-    final List<Map<String, dynamic>> finalizedLevels = [];
-    for (int i = 0; i < _generatedLevelsPreview!.length; i++) {
-      final item = Map<String, dynamic>.from(_generatedLevelsPreview![i]);
-      item['title'] = _previewControllers[i].text.trim();
-      finalizedLevels.add(item);
-    }
-
-    final payload = {
-      'title': title,
-      'description': description.isNotEmpty
-          ? description
-          : 'AI generated roadmap for $title',
-      'type': _selectedType,
-      'source': 'ai',
-      'mapStyle': _mapStyle,
-      'examMode': false,
-      'levels': finalizedLevels,
-    };
-
-    final roadmap =
-        await ref.read(roadmapProvider.notifier).createRoadmap(payload);
+  Future<void> _fallbackLocalGenerate() async {
     if (!mounted) return;
+    setState(() => _isCreating = true);
+    final type = _mapSkillToType();
+    final days = _useCustomDays
+        ? (int.tryParse(_customDaysCtrl.text.trim()) ?? _wizardDays)
+        : _wizardDays;
+    final levels = _generateSmartRoadmap(_wizardSkillLabel(), '', type);
+    final payload = {
+      'title': _wizardSkillLabel(),
+      'description': 'AI-generated ${_wizardSkillLabel()} roadmap — $days day plan',
+      'type': type,
+      'source': 'ai',
+      'mapStyle': 'simple',
+      'examMode': false,
+      'levels': levels,
+    };
+    final roadmap = await ref.read(roadmapProvider.notifier).createRoadmap(payload);
+    if (!mounted) return;
+    setState(() => _isCreating = false);
     if (roadmap != null) {
       context.go('${AppRoutes.map}/${roadmap.id}');
     } else {
-      setState(() => _isCreating = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Failed to save roadmap. Please try again.')),
+        const SnackBar(content: Text('Failed to generate roadmap. Please try again.')),
       );
     }
   }
@@ -695,103 +681,6 @@ Rules:
       );
     }
 
-    if (_generatedLevelsPreview != null) {
-      return Scaffold(
-        backgroundColor: const Color(0xFF0A0A0F),
-        appBar: AppBar(
-          title: Text('Preview Roadmap', style: AppTextStyles.h3),
-          backgroundColor: Colors.transparent,
-          leading: IconButton(
-            icon: const Icon(Icons.close, color: AppColors.textPrimary),
-            onPressed: () => setState(() => _generatedLevelsPreview = null),
-          ),
-        ),
-        body: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.pagePadding),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Customize your milestone titles before creating:',
-                    style: GoogleFonts.inter(
-                        fontSize: 14, color: AppColors.textSecondary)),
-                const SizedBox(height: 16),
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: _generatedLevelsPreview!.length,
-                    itemBuilder: (ctx, index) {
-                      final lvl = _generatedLevelsPreview![index];
-                      final proof = lvl['proofType'] as String? ?? 'quiz';
-                      final xp = lvl['xpReward'] as int? ?? 100;
-                      final mins = lvl['estimatedMinutes'] as int? ?? 45;
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF12121A),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFF1E1E2E)),
-                        ),
-                        child: Row(
-                          children: [
-                            CircleAvatar(
-                              radius: 16,
-                              backgroundColor:
-                                  AppColors.brand.withOpacity(0.2),
-                              child: Text(
-                                '${index + 1}',
-                                style: GoogleFonts.spaceGrotesk(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w800,
-                                  color: AppColors.brand,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  TextField(
-                                    controller: _previewControllers[index],
-                                    style: GoogleFonts.inter(
-                                        fontSize: 14, color: Colors.white),
-                                    decoration: const InputDecoration(
-                                      border: InputBorder.none,
-                                      isDense: true,
-                                      contentPadding: EdgeInsets.zero,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '$proof • ${mins}m • $xp XP',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 11,
-                                      color: AppColors.textMuted,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 16),
-                StepUpButton(
-                  label: _isCreating ? 'Saving Roadmap...' : 'Save & Start Roadmap 🚀',
-                  isLoading: _isCreating,
-                  onPressed: _isCreating ? null : _saveAI,
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A0F),
       appBar: AppBar(
@@ -958,13 +847,14 @@ Rules:
                                       : 'Choose a target date...',
                                   style: AppTextStyles.bodyMedium.copyWith(
                                       color: _deadline != null
-                                          ? AppColors.textPrimary
-                                          : AppColors.textMuted),
+                                           ? AppColors.textPrimary
+                                           : AppColors.textMuted),
                                 ),
                               ],
                             ),
                           ),
-                          const Icon(Icons.arrow_forward_ios, size: 14, color: AppColors.textMuted),
+                          const Icon(Icons.arrow_forward_ios,
+                              size: 14, color: AppColors.textMuted),
                         ],
                       ),
                     ),
@@ -981,148 +871,505 @@ Rules:
             ),
           ),
 
-          // ── AI Generate Tab ────────────────────────────────────
-          SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.pagePadding,
-              AppSpacing.pagePadding,
-              AppSpacing.pagePadding,
-              140,
+          // ── AI Generate Tab (5-step Wizard) ──────────────────────
+          _buildWizardTab(),
+        ],
+      ),
+    );
+  }
+
+  // ─── Wizard Build Methods ───────────────────────────────────────
+  Widget _buildWizardTab() {
+    return Column(
+      children: [
+        _buildWizardHeader(),
+        Expanded(
+          child: PageView(
+            controller: _wizardPageCtrl,
+            physics: const NeverScrollableScrollPhysics(),
+            children: [
+              _buildStep1Skill(),
+              _buildStep2Duration(),
+              _buildStep3Time(),
+              _buildStep4Level(),
+              _buildStep5Style(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWizardHeader() {
+    const titles = ['Choose Goal', 'Duration', 'Daily Time', 'Your Level', 'Learning Style'];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Step ${_wizardStep + 1} of 5',
+                  style: GoogleFonts.spaceMono(
+                      fontSize: 11, fontWeight: FontWeight.w700,
+                      color: AppColors.brand, letterSpacing: 0.5)),
+              Text(titles[_wizardStep.clamp(0, 4)],
+                  style: GoogleFonts.inter(fontSize: 11, color: AppColors.textMuted)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: (_wizardStep + 1) / 5,
+              backgroundColor: const Color(0xFF1E1E2E),
+              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.brand),
+              minHeight: 3,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _wizardNext() {
+    if (_wizardStep >= 4) return;
+    final next = _wizardStep + 1;
+    setState(() => _wizardStep = next);
+    _wizardPageCtrl.animateToPage(next,
+        duration: const Duration(milliseconds: 350), curve: Curves.easeInOutCubic);
+  }
+
+  void _wizardPrev() {
+    if (_wizardStep <= 0) return;
+    final prev = _wizardStep - 1;
+    setState(() => _wizardStep = prev);
+    _wizardPageCtrl.animateToPage(prev,
+        duration: const Duration(milliseconds: 350), curve: Curves.easeInOutCubic);
+  }
+
+  // ── Step 1: Skill ────────────────────────────────────────────────
+  Widget _buildStep1Skill() {
+    final skills = [
+      ('python', '🐍', 'Python'),
+      ('dsa', '📊', 'DSA'),
+      ('mern', '🌐', 'MERN Stack'),
+      ('flutter', '📱', 'Flutter'),
+      ('gym', '💪', 'Gym / Fitness'),
+      ('aiml', '🤖', 'AI / ML'),
+      ('work', '💼', 'Custom Work'),
+      ('custom', '✏️', 'Custom'),
+    ];
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 140),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('What do you want\nto learn?',
+              style: GoogleFonts.syne(fontSize: 24, fontWeight: FontWeight.w800,
+                  color: Colors.white, height: 1.2))
+              .animate().fadeIn(duration: 300.ms).slideY(begin: 0.08),
+          const SizedBox(height: 4),
+          Text('Select a skill or goal to get started',
+              style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary))
+              .animate().fadeIn(delay: 80.ms),
+          const SizedBox(height: 24),
+          GridView.count(
+            crossAxisCount: 2, shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 10, crossAxisSpacing: 10, childAspectRatio: 2.6,
+            children: skills.map((s) {
+              final id = s.$1; final emoji = s.$2; final label = s.$3;
+              final isSelected = _wizardSkill == id;
+              return GestureDetector(
+                onTap: () {
+                  setState(() => _wizardSkill = id);
+                  HapticFeedback.lightImpact();
+                  if (id != 'custom') {
+                    Future.delayed(const Duration(milliseconds: 220), () {
+                      if (mounted && _wizardSkill == id) _wizardNext();
+                    });
+                  }
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  decoration: BoxDecoration(
+                    gradient: isSelected ? AppColors.brandGradient : null,
+                    color: isSelected ? null : const Color(0xFF12121A),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                        color: isSelected ? Colors.transparent : const Color(0xFF1E1E2E)),
+                    boxShadow: isSelected
+                        ? [BoxShadow(color: AppColors.brand.withOpacity(0.35), blurRadius: 12)]
+                        : null,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(emoji, style: const TextStyle(fontSize: 20)),
+                      const SizedBox(width: 8),
+                      Text(label,
+                          style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700,
+                              color: isSelected ? Colors.white : AppColors.textSecondary)),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ).animate().fadeIn(delay: 120.ms),
+          if (_wizardSkill == 'custom') ...[
+            const SizedBox(height: 20),
+            StepUpInput(
+              label: 'Describe your goal',
+              hint: 'e.g. Learn Rust, Build a startup, Master piano...',
+              controller: _customSkillCtrl,
+              maxLines: 2,
+            ).animate().fadeIn(),
+            const SizedBox(height: 16),
+            StepUpButton(
+              label: 'Next →',
+              onPressed: _customSkillCtrl.text.trim().isNotEmpty ? _wizardNext : null,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ── Step 2: Duration ─────────────────────────────────────────────
+  Widget _buildStep2Duration() {
+    const options = [7, 15, 30, 60, 90, 180];
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 140),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildBackRow(),
+          const SizedBox(height: 16),
+          Text('How many days?',
+              style: GoogleFonts.syne(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white))
+              .animate().fadeIn(duration: 300.ms),
+          const SizedBox(height: 4),
+          Text('Choose your roadmap duration',
+              style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary))
+              .animate().fadeIn(delay: 80.ms),
+          const SizedBox(height: 24),
+          Wrap(
+            spacing: 10, runSpacing: 10,
+            children: [
+              ...options.map((d) {
+                final isSelected = !_useCustomDays && _wizardDays == d;
+                return GestureDetector(
+                  onTap: () {
+                    setState(() { _wizardDays = d; _useCustomDays = false; });
+                    HapticFeedback.lightImpact();
+                    Future.delayed(const Duration(milliseconds: 220), () {
+                      if (mounted) _wizardNext();
+                    });
+                  },
+                  child: _WizardChip(label: '$d Days', isSelected: isSelected),
+                );
+              }),
+              GestureDetector(
+                onTap: () => setState(() => _useCustomDays = !_useCustomDays),
+                child: _WizardChip(label: 'Custom', isSelected: _useCustomDays,
+                    icon: Icons.edit_outlined),
+              ),
+            ],
+          ).animate().fadeIn(delay: 120.ms),
+          if (_useCustomDays) ...[
+            const SizedBox(height: 20),
+            StepUpInput(
+              label: 'Number of days',
+              hint: 'e.g. 45',
+              controller: _customDaysCtrl,
+            ).animate().fadeIn(),
+            const SizedBox(height: 16),
+            StepUpButton(
+              label: 'Next →',
+              onPressed: (int.tryParse(_customDaysCtrl.text.trim()) ?? 0) > 0
+                  ? () {
+                      setState(() => _wizardDays = int.parse(_customDaysCtrl.text.trim()));
+                      _wizardNext();
+                    }
+                  : null,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ── Step 3: Daily Time ───────────────────────────────────────────
+  Widget _buildStep3Time() {
+    final options = [
+      ('30min', '30 min/day', 'Quick focused sessions', Icons.flash_on_rounded),
+      ('1h', '1 hour/day', 'Steady consistent progress', Icons.hourglass_empty_outlined),
+      ('2h', '2 hours/day', 'Serious commitment', Icons.hourglass_bottom_outlined),
+      ('3h+', '3+ hours/day', 'Intensive full immersion', Icons.local_fire_department_outlined),
+    ];
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 140),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildBackRow(),
+          const SizedBox(height: 16),
+          Text('Daily time available?',
+              style: GoogleFonts.syne(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white))
+              .animate().fadeIn(duration: 300.ms),
+          const SizedBox(height: 4),
+          Text('How much time can you dedicate daily?',
+              style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary))
+              .animate().fadeIn(delay: 80.ms),
+          const SizedBox(height: 20),
+          ...options.asMap().entries.map((entry) {
+            final idx = entry.key;
+            final id = entry.value.$1;
+            final label = entry.value.$2;
+            final desc = entry.value.$3;
+            final icon = entry.value.$4;
+            final isSelected = _wizardTime == id;
+            return GestureDetector(
+              onTap: () {
+                setState(() => _wizardTime = id);
+                HapticFeedback.lightImpact();
+                Future.delayed(const Duration(milliseconds: 220), () {
+                  if (mounted) _wizardNext();
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  gradient: isSelected ? AppColors.brandGradient : null,
+                  color: isSelected ? null : const Color(0xFF12121A),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                      color: isSelected ? Colors.transparent : const Color(0xFF1E1E2E)),
+                  boxShadow: isSelected
+                      ? [BoxShadow(color: AppColors.brand.withOpacity(0.3), blurRadius: 12)]
+                      : null,
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 44, height: 44,
+                      decoration: BoxDecoration(
+                        color: isSelected ? Colors.white.withOpacity(0.2) : AppColors.brand.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(icon,
+                          color: isSelected ? Colors.white : AppColors.brand, size: 22),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(label,
+                              style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700,
+                                  color: isSelected ? Colors.white : AppColors.textPrimary)),
+                          Text(desc,
+                              style: GoogleFonts.inter(fontSize: 12,
+                                  color: isSelected
+                                      ? Colors.white.withOpacity(0.75)
+                                      : AppColors.textMuted)),
+                        ],
+                      ),
+                    ),
+                    if (isSelected)
+                      const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                  ],
+                ),
+              ).animate(key: ValueKey(id)).fadeIn(delay: Duration(milliseconds: idx * 60)),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  // ── Step 4: Current Level ────────────────────────────────────────
+  Widget _buildStep4Level() {
+    final options = [
+      ('beginner', '🌱', 'Complete Beginner', 'Starting from zero'),
+      ('some', '🌿', 'Some Knowledge', 'Know the basics'),
+      ('intermediate', '🌳', 'Intermediate', 'Comfortable with fundamentals'),
+      ('advanced', '🏔️', 'Advanced', 'Looking to go deep'),
+    ];
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 140),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildBackRow(),
+          const SizedBox(height: 16),
+          Text("What's your current level?",
+              style: GoogleFonts.syne(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white))
+              .animate().fadeIn(duration: 300.ms),
+          const SizedBox(height: 4),
+          Text("We'll tailor the roadmap to you",
+              style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary))
+              .animate().fadeIn(delay: 80.ms),
+          const SizedBox(height: 20),
+          ...options.asMap().entries.map((entry) {
+            final idx = entry.key;
+            final id = entry.value.$1;
+            final emoji = entry.value.$2;
+            final label = entry.value.$3;
+            final desc = entry.value.$4;
+            final isSelected = _wizardLevel == id;
+            return GestureDetector(
+              onTap: () {
+                setState(() => _wizardLevel = id);
+                HapticFeedback.lightImpact();
+                Future.delayed(const Duration(milliseconds: 220), () {
+                  if (mounted) _wizardNext();
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  gradient: isSelected ? AppColors.brandGradient : null,
+                  color: isSelected ? null : const Color(0xFF12121A),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                      color: isSelected ? Colors.transparent : const Color(0xFF1E1E2E)),
+                  boxShadow: isSelected
+                      ? [BoxShadow(color: AppColors.brand.withOpacity(0.3), blurRadius: 12)]
+                      : null,
+                ),
+                child: Row(
+                  children: [
+                    Text(emoji, style: const TextStyle(fontSize: 28)),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(label,
+                              style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700,
+                                  color: isSelected ? Colors.white : AppColors.textPrimary)),
+                          Text(desc,
+                              style: GoogleFonts.inter(fontSize: 12,
+                                  color: isSelected
+                                      ? Colors.white.withOpacity(0.75)
+                                      : AppColors.textMuted)),
+                        ],
+                      ),
+                    ),
+                    if (isSelected)
+                      const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                  ],
+                ),
+              ).animate(key: ValueKey(id)).fadeIn(delay: Duration(milliseconds: idx * 60)),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  // ── Step 5: Learning Style + Summary ────────────────────────────
+  Widget _buildStep5Style() {
+    final styles = [
+      ('project', '🎯', 'Project-Based'),
+      ('theory', '📚', 'Theory First'),
+      ('mixed', '⚡', 'Mixed Approach'),
+      ('fasttrack', '🏃', 'Fast Track'),
+    ];
+    final timeLabel = {
+      '30min': '30 min/day', '1h': '1 hour/day',
+      '2h': '2 hours/day', '3h+': '3+ hours/day',
+    }[_wizardTime] ?? '1 hour/day';
+    final levelLabel = {
+      'beginner': 'Beginner', 'some': 'Some Knowledge',
+      'intermediate': 'Intermediate', 'advanced': 'Advanced',
+    }[_wizardLevel] ?? 'Beginner';
+    final days = _useCustomDays
+        ? (int.tryParse(_customDaysCtrl.text) ?? _wizardDays)
+        : _wizardDays;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 140),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildBackRow(),
+          const SizedBox(height: 16),
+          Text('Your learning style?',
+              style: GoogleFonts.syne(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white))
+              .animate().fadeIn(duration: 300.ms),
+          const SizedBox(height: 4),
+          Text('How do you learn best?',
+              style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary))
+              .animate().fadeIn(delay: 80.ms),
+          const SizedBox(height: 20),
+          Wrap(
+            spacing: 10, runSpacing: 10,
+            children: styles.map((o) {
+              final id = o.$1; final emoji = o.$2; final label = o.$3;
+              final isSelected = _wizardStyle == id;
+              return GestureDetector(
+                onTap: () => setState(() => _wizardStyle = id),
+                child: _WizardChip(label: '$emoji  $label', isSelected: isSelected),
+              );
+            }).toList(),
+          ).animate().fadeIn(delay: 100.ms),
+          const SizedBox(height: 28),
+          // Summary card
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF12121A),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.brand.withOpacity(0.3)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: AppSpacing.md),
-                // AI key status banner
-                FutureBuilder<String>(
-                  future: SharedPreferences.getInstance().then(
-                    (prefs) => prefs.getString('openai_api_key') ?? ''),
-                  builder: (ctx, snap) {
-                    final hasKey = (snap.data ?? '').isNotEmpty;
-                    return Container(
-                      padding: const EdgeInsets.all(AppSpacing.base),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: hasKey
-                              ? [const Color(0xFF0D2B1A), const Color(0xFF12121A)]
-                              : [const Color(0xFF1A1040), const Color(0xFF12121A)],
-                        ),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: hasKey
-                              ? AppColors.green.withOpacity(0.4)
-                              : AppColors.brand.withOpacity(0.3),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            hasKey ? Icons.check_circle_rounded : Icons.auto_awesome_rounded,
-                            color: hasKey ? AppColors.green : AppColors.brand,
-                            size: 28,
-                          ),
-                          const SizedBox(width: AppSpacing.md),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  hasKey ? 'OpenAI API active' : 'Smart Local Generation',
-                                  style: GoogleFonts.spaceMono(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                    color: hasKey ? AppColors.green : AppColors.textPrimary,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  hasKey
-                                      ? 'Your OpenAI key will generate a custom roadmap.'
-                                      : 'No API key? No problem — expert templates built in. Add key in Settings for real AI.',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 12,
-                                    color: AppColors.textSecondary,
-                                  ),
-                                ),
-                                if (!hasKey) ...[
-                                  const SizedBox(height: 6),
-                                  GestureDetector(
-                                    onTap: () => context.push(AppRoutes.settings),
-                                    child: Text(
-                                      'Add OpenAI key →',
-                                      style: GoogleFonts.inter(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppColors.brand,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: AppSpacing.xl),
-                StepUpInput(
-                  label: 'Goal Title',
-                  hint: 'e.g. Learn Python for Data Science',
-                  controller: _aiGoalTitleCtrl,
-                  errorText: _aiTitleError.isEmpty ? null : _aiTitleError,
-                ),
-                const SizedBox(height: AppSpacing.base),
-                StepUpInput(
-                  label: 'Describe your goal, timeline, and current level',
-                  hint: 'e.g. I want to learn DSA in 30 days. I know basic programming.',
-                  controller: _aiGoalDescCtrl,
-                  maxLines: 4,
-                ),
-                const SizedBox(height: AppSpacing.xl),
-                Text('Category', style: AppTextStyles.label),
-                const SizedBox(height: AppSpacing.sm),
-                Wrap(
-                  spacing: AppSpacing.sm,
-                  runSpacing: AppSpacing.sm,
-                  children: _types.map((t) {
-                    final (id, emoji, label) = t;
-                    final isSelected = _selectedType == id;
-                    return GestureDetector(
-                      onTap: () => setState(() => _selectedType = id),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          gradient: isSelected ? AppColors.brandGradient : null,
-                          color: isSelected ? null : const Color(0xFF12121A),
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(
-                            color: isSelected ? Colors.transparent : const Color(0xFF1E1E2E),
-                          ),
-                          boxShadow: isSelected ? [
-                            BoxShadow(color: AppColors.brand.withOpacity(0.3), blurRadius: 8),
-                          ] : null,
-                        ),
-                        child: Text('$emoji  $label',
-                            style: AppTextStyles.bodyMedium.copyWith(
-                                color: isSelected ? Colors.white : AppColors.textSecondary)),
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: AppSpacing.xl),
-                _buildMapStyleSelector(),
-                const SizedBox(height: AppSpacing.xxxl),
-                StepUpButton(
-                  label: 'Generate with AI ✨',
-                  isLoading: _isGeneratingAI,
-                  onPressed: _isGeneratingAI ? null : _generateAI,
-                ),
+                Row(children: [
+                  const Icon(Icons.auto_awesome_rounded, color: AppColors.brand, size: 16),
+                  const SizedBox(width: 8),
+                  Text('Your roadmap summary',
+                      style: GoogleFonts.spaceMono(fontSize: 12,
+                          color: AppColors.brand, fontWeight: FontWeight.bold)),
+                ]),
+                const SizedBox(height: 12),
+                _SummaryRow(label: 'Goal', value: _wizardSkillLabel()),
+                _SummaryRow(label: 'Duration', value: '$days days'),
+                _SummaryRow(label: 'Daily time', value: timeLabel),
+                _SummaryRow(label: 'Level', value: levelLabel),
               ],
             ),
-          ),
+          ).animate().fadeIn(delay: 180.ms),
+          const SizedBox(height: 20),
+          StepUpButton(
+            label: _isGeneratingAI || _isCreating
+                ? 'Generating...'
+                : 'Generate My Roadmap ✨',
+            isLoading: _isGeneratingAI || _isCreating,
+            onPressed: (_isGeneratingAI || _isCreating) ? null : _runAIGeneration,
+          ).animate().fadeIn(delay: 240.ms),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBackRow() {
+    return GestureDetector(
+      onTap: _wizardPrev,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.arrow_back_ios_new_rounded, size: 13, color: AppColors.textMuted),
+          const SizedBox(width: 4),
+          Text('Back', style: GoogleFonts.inter(fontSize: 13, color: AppColors.textMuted)),
         ],
       ),
     );
@@ -1474,6 +1721,81 @@ class _SubLevelRow extends StatelessWidget {
               child: Icon(Icons.close, size: 14, color: AppColors.error),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Wizard Chip ─────────────────────────────────────────────────
+class _WizardChip extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final IconData? icon;
+
+  const _WizardChip({
+    required this.label,
+    required this.isSelected,
+    this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        gradient: isSelected ? AppColors.brandGradient : null,
+        color: isSelected ? null : const Color(0xFF12121A),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: isSelected ? Colors.transparent : const Color(0xFF1E1E2E),
+        ),
+        boxShadow: isSelected
+            ? [BoxShadow(color: AppColors.brand.withOpacity(0.3), blurRadius: 8)]
+            : null,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon!, size: 14,
+                color: isSelected ? Colors.white : AppColors.textSecondary),
+            const SizedBox(width: 6),
+          ],
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: isSelected ? Colors.white : AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Summary Row ─────────────────────────────────────────────────
+class _SummaryRow extends StatelessWidget {
+  final String label;
+  final String value;
+  const _SummaryRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label,
+              style: GoogleFonts.inter(fontSize: 12, color: AppColors.textMuted)),
+          Text(value,
+              style: GoogleFonts.inter(
+                  fontSize: 12, fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary)),
         ],
       ),
     );

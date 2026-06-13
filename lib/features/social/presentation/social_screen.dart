@@ -313,13 +313,13 @@ class _FriendsTab extends ConsumerWidget {
                 ),
               ),
 
-            const SliverToBoxAdapter(child: SizedBox(height: 100)),
+            const SliverToBoxAdapter(child: SizedBox(height: 140)),
           ],
         ),
 
         // Add Friend Quick FAB
         Positioned(
-          bottom: 24,
+          bottom: 110,
           right: 20,
           child: BounceOnTap(
             onTap: () => _showAddFriendSheet(context, ref),
@@ -861,7 +861,7 @@ class _LeaderboardTab extends ConsumerWidget {
               childCount: leaders.length - 3,
             ),
           ),
-        const SliverToBoxAdapter(child: SizedBox(height: 100)),
+        const SliverToBoxAdapter(child: SizedBox(height: 140)),
       ],
     );
   }

@@ -17,6 +17,7 @@ import '../../features/roadmap/presentation/level_detail_screen.dart';
 import '../../features/verification/presentation/verification_screen.dart';
 import '../../features/ai_coach/presentation/ai_coach_screen.dart';
 import '../../features/profile/presentation/settings_screen.dart';
+import '../../features/notifications/presentation/notifications_screen.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../storage/token_storage.dart';
 
@@ -39,6 +40,7 @@ class AppRoutes {
   static const verification = '/verification';
   static const coach = '/coach';
   static const settings = '/settings';
+  static const notifications = '/notifications';
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -155,6 +157,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.settings,
         pageBuilder: (context, state) => _slide(const SettingsScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.notifications,
+        pageBuilder: (context, state) => _slide(const NotificationsScreen()),
       ),
     ],
     errorBuilder: (context, state) => _ErrorPage(error: state.error),

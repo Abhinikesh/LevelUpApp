@@ -544,6 +544,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               ),
             ),
           ),
+          const SliverToBoxAdapter(
+            child: SizedBox(height: 140),
+          ),
         ],
       ),
     );

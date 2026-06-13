@@ -64,23 +64,26 @@ class _MapListScreenState extends ConsumerState<MapListScreen> {
     return Scaffold(
       backgroundColor: AppColors.bgDark,
       // FAB: gradient circle, navigates to create
-      floatingActionButton: BounceOnTap(
-        onTap: () => context.push(AppRoutes.create),
-        child: Container(
-          width: 56,
-          height: 56,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: AppColors.brandGradient,
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.brand.withValues(alpha: 0.45),
-                blurRadius: 20,
-                offset: const Offset(0, 6),
-              ),
-            ],
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 90),
+        child: BounceOnTap(
+          onTap: () => context.push(AppRoutes.create),
+          child: Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: AppColors.brandGradient,
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.brand.withValues(alpha: 0.45),
+                  blurRadius: 20,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: const Icon(Icons.add, color: Colors.white, size: 28),
           ),
-          child: const Icon(Icons.add, color: Colors.white, size: 28),
         ),
       ),
       body: SafeArea(

@@ -155,6 +155,66 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  // ── Google Sign-In ──────────────────────────────────────────
+
+  Future<bool> loginWithGoogle(String idToken) async {
+    state = state.copyWith(isLoading: true, error: null);
+
+    // ── Demo / mock mode ──────────────────────────────────────
+    if (_isPlaceholderBackend) {
+      await Future.delayed(const Duration(milliseconds: 900));
+      final mock = _mockUser(
+        name: 'Google User',
+        email: 'googleuser@example.com',
+      );
+      await TokenStorage.saveToken('mock-jwt-token-${mock.id}');
+      await TokenStorage.saveUser(jsonEncode(mock.toJson()));
+      state = state.copyWith(
+        isLoading: false,
+        currentUser: mock,
+        isAuthenticated: true,
+      );
+      return true;
+    }
+
+    // ── Real API call ─────────────────────────────────────────
+    try {
+      final response = await _dio.post(
+        ApiConstants.googleLogin,
+        data: {'idToken': idToken},
+      );
+      final data = response.data as Map<String, dynamic>;
+      final token = data['token'] as String?;
+      final userData = data['user'] as Map<String, dynamic>?;
+
+      if (token != null) {
+        await TokenStorage.saveToken(token);
+      }
+
+      final user = userData != null ? UserModel.fromJson(userData) : null;
+      if (user != null) {
+        await TokenStorage.saveUser(jsonEncode(user.toJson()));
+      }
+
+      state = state.copyWith(
+        isLoading: false,
+        currentUser: user,
+        isAuthenticated: token != null,
+      );
+      return token != null;
+    } on DioException catch (e) {
+      final ex = ApiException.fromDioError(e);
+      state = state.copyWith(isLoading: false, error: ex.message);
+      return false;
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: 'Google Sign-In failed. Please try again.',
+      );
+      return false;
+    }
+  }
+
   // ── Register ──────────────────────────────────────────────────
 
   Future<bool> register({

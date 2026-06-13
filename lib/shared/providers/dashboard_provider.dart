@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../core/constants/api_constants.dart';
+import '../../core/network/dio_client.dart';
 import '../../models/level_model.dart';
 import '../../models/roadmap_model.dart';
 import 'auth_provider.dart';
@@ -205,4 +207,24 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
 final dashboardProvider =
     StateNotifierProvider<DashboardNotifier, DashboardState>((ref) {
   return DashboardNotifier(ref);
+});
+
+// ─────────────────────────────────────────────────────────────
+// Activity Calendar — fetches the real active dates from the API
+// Falls back gracefully to an empty set on any error.
+// ─────────────────────────────────────────────────────────────
+
+final activityCalendarProvider = FutureProvider<Set<String>>((ref) async {
+  try {
+    final res = await DioClient.instance
+        .get(ApiConstants.activityCalendar, queryParameters: {'days': 30});
+    final data = res.data as Map<String, dynamic>?;
+    if (data?['success'] == true) {
+      final raw = (data!['activeDates'] as List<dynamic>?) ?? [];
+      return raw.map((d) => d.toString()).toSet();
+    }
+    return {};
+  } catch (_) {
+    return {};
+  }
 });

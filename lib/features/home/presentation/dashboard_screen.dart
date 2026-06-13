@@ -244,10 +244,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(AppSpacing.pagePadding,
                     AppSpacing.xl + 4, AppSpacing.pagePadding, 0),
-                child: _ActivityDotGrid(
-                        streakCount: user?.streakCount ?? 0)
-                    .animate()
-                    .fadeIn(delay: 280.ms),
+                child: Consumer(
+                  builder: (context, ref, _) {
+                    final calAsync = ref.watch(activityCalendarProvider);
+                    final activeDates = calAsync.maybeWhen(
+                      data: (d) => d,
+                      orElse: () => <String>{},
+                    );
+                    return _ActivityDotGrid(
+                      streakCount: user?.streakCount ?? 0,
+                      activeDates: activeDates,
+                    ).animate().fadeIn(delay: 280.ms);
+                  },
+                ),
               ),
             ),
 
@@ -1068,10 +1077,11 @@ class _RoadmapCard extends StatelessWidget {
   }
 }
 
-// ─── FIX 4: 30-Day Activity Grid ─────────────────────────────
+// ─── FIX 4: 30-Day Activity Grid ──────────────────────────────
 class _ActivityDotGrid extends StatefulWidget {
   final int streakCount;
-  const _ActivityDotGrid({required this.streakCount});
+  final Set<String> activeDates; // ISO date strings e.g. "2025-06-12"
+  const _ActivityDotGrid({required this.streakCount, required this.activeDates});
 
   @override
   State<_ActivityDotGrid> createState() => _ActivityDotGridState();
@@ -1159,13 +1169,12 @@ class _ActivityDotGridState extends State<_ActivityDotGrid>
                       // 6 dots per row
                       ...List.generate(6, (col) {
                         final idx = row * 6 + col; // 0..29
-                        // idx 29 = today
+                        // Build the date string for each slot (idx 29 = today)
+                        final date = DateTime.now().subtract(Duration(days: 29 - idx));
+                        final dateStr =
+                            '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
                         final isToday = idx == 29;
-                        // completed: past days within streak
-                        final isCompleted =
-                            idx >= (29 - streak + 1) && idx < 29 && streak > 0;
-                        // future: beyond today (won't happen in 0..29, idx 29 is today)
-                        // We treat any idx > 29 as future but since max=29 that's none.
+                        final isCompleted = widget.activeDates.contains(dateStr) && !isToday;
                         return Padding(
                           padding: EdgeInsets.only(right: col < 5 ? 8 : 0),
                           child: isToday

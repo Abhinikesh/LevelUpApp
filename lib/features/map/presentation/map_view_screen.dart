@@ -171,10 +171,8 @@ class _MapViewScreenState extends ConsumerState<MapViewScreen>
   void _showBgSheet() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.bgCard,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (_) => _BgPickerSheet(
         current: _currentBg,
         onSelect: (bg) {
@@ -203,11 +201,14 @@ class _MapViewScreenState extends ConsumerState<MapViewScreen>
 
     return Scaffold(
       backgroundColor: AppColors.bgDark,
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: AppColors.brand,
-        elevation: 8,
-        onPressed: _scrollToActive,
-        child: const Icon(Icons.gps_fixed, color: Colors.white),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 90),
+        child: FloatingActionButton(
+          backgroundColor: AppColors.brand,
+          elevation: 8,
+          onPressed: _scrollToActive,
+          child: const Icon(Icons.gps_fixed, color: Colors.white),
+        ),
       ),
       body: Stack(
         children: [
@@ -273,8 +274,18 @@ class _BgPickerSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.bgCard,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      padding: EdgeInsets.only(
+        left: 24,
+        right: 24,
+        top: 24,
+        bottom: 24 + bottomPadding + 80,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,

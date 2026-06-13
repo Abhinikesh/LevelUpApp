@@ -4,8 +4,10 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/utils/helpers.dart';
 import '../../../shared/providers/auth_provider.dart';
+import '../../../shared/providers/notifications_provider.dart';
 import '../../../shared/widgets/premium_animations.dart';
 
 class HomeShell extends ConsumerStatefulWidget {
@@ -51,28 +53,40 @@ class _HomeShellState extends ConsumerState<HomeShell> {
           screenTitle: _tabs[_selectedIndex].label,
         ),
       ),
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 250),
-        switchInCurve: Curves.easeIn,
-        switchOutCurve: Curves.easeOut,
-        transitionBuilder: (child, anim) =>
-            FadeTransition(opacity: anim, child: child),
-        child: KeyedSubtree(
-          key: ValueKey(_selectedIndex),
-          child: widget.child,
-        ),
-      ),
-      bottomNavigationBar: _BottomNav(
-        selected: _selectedIndex,
-        tabs: _tabs,
-        onTap: _onTap,
+      body: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              switchInCurve: Curves.easeIn,
+              switchOutCurve: Curves.easeOut,
+              transitionBuilder: (child, anim) =>
+                  FadeTransition(opacity: anim, child: child),
+              child: KeyedSubtree(
+                key: ValueKey(_selectedIndex),
+                child: widget.child,
+              ),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: _BottomNav(
+              selected: _selectedIndex,
+              tabs: _tabs,
+              onTap: _onTap,
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
 // ─── Custom top bar ───────────────────────────────────────────
-class _TopBar extends StatelessWidget implements PreferredSizeWidget {
+class _TopBar extends ConsumerWidget implements PreferredSizeWidget {
   final int xp;
   final int streak;
   final String screenTitle;
@@ -82,7 +96,8 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
   Size get preferredSize => const Size.fromHeight(60);
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final unread = ref.watch(notificationsProvider).unreadCount;
     return Container(
       decoration: BoxDecoration(
         color: AppColors.bgDark,
@@ -162,26 +177,49 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
                 ),
               ),
               const SizedBox(width: 4),
-              // Bell: simple icon button, no background (ONE bell icon on the right side)
-              IconButton(
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                icon: const Icon(
-                  Icons.notifications_none_rounded,
-                  color: AppColors.textPrimary,
-                  size: 22,
-                ),
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      backgroundColor: AppColors.bgCard,
-                      content: Text(
-                        'Notifications coming soon!',
-                        style: GoogleFonts.inter(color: AppColors.textPrimary),
+              // Bell with live unread badge
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    icon: const Icon(
+                      Icons.notifications_none_rounded,
+                      color: AppColors.textPrimary,
+                      size: 22,
+                    ),
+                    onPressed: () async {
+                      await context.push(AppRoutes.notifications);
+                      // Refresh unread count after returning from notifications
+                    },
+                  ),
+                  if (unread > 0)
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: IgnorePointer(
+                        child: Container(
+                          width: 16,
+                          height: 16,
+                          decoration: const BoxDecoration(
+                            color: AppColors.coral,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: Text(
+                              unread > 9 ? '9+' : '$unread',
+                              style: GoogleFonts.inter(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                  );
-                },
+                ],
               ),
             ],
           ),

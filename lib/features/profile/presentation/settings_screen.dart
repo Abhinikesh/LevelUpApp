@@ -24,15 +24,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   // Theme configuration
   int _currentThemeIndex = 0;
 
-  // AI Configuration
-  final _openAiKeyCtrl = TextEditingController();
-  bool _showApiKey = false;
-  bool _keySaved = false;
 
   @override
   void initState() {
     super.initState();
-    _loadApiKey();
     _loadThemePref();
   }
 
@@ -178,41 +173,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
       ),
     );
-  }
-
-  Future<void> _loadApiKey() async {
-    final prefs = await SharedPreferences.getInstance();
-    final stored = prefs.getString('openai_api_key') ?? '';
-    if (mounted) {
-      _openAiKeyCtrl.text = stored;
-      setState(() => _keySaved = stored.isNotEmpty);
-    }
-  }
-
-  Future<void> _saveApiKey() async {
-    final key = _openAiKeyCtrl.text.trim();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('openai_api_key', key);
-    setState(() => _keySaved = key.isNotEmpty);
-    if (mounted) {
-      HapticFeedback.lightImpact();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Row(
-          children: [
-            const Text('✅  ', style: TextStyle(fontSize: 16)),
-            Text(
-              key.isEmpty ? 'API key cleared' : 'API key saved securely',
-              style: GoogleFonts.inter(fontSize: 14, color: Colors.white),
-            ),
-          ],
-        ),
-        backgroundColor: key.isEmpty
-            ? AppColors.bgCard
-            : const Color(0xFF0D2B1A),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ));
-    }
   }
 
   void _showAppThemeSheet(BuildContext context, WidgetRef ref, AppTheme activeTheme) {
@@ -429,12 +389,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   @override
-  void dispose() {
-    _openAiKeyCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider).currentUser;
     final activeTheme = ref.watch(themeProvider);
@@ -579,145 +533,50 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ],
               ),
 
-              // ── AI Configuration ─────────────────────────────────
+              // ── AI Powered (✅ Grok AI powered, no key needed) ───────────
               _Section(
-                title: 'AI Configuration',
+                title: 'AI Engine',
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  Container(
+                    margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [AppColors.brand.withValues(alpha: 0.12), const Color(0xFF12121A)],
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.brand.withValues(alpha: 0.35)),
+                    ),
+                    child: Row(
                       children: [
-                        // Status banner
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
+                          width: 44, height: 44,
                           decoration: BoxDecoration(
-                            color: _keySaved
-                                ? AppColors.green.withValues(alpha: 0.08)
-                                : AppColors.brand.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: _keySaved
-                                  ? AppColors.green.withValues(alpha: 0.3)
-                                  : AppColors.brand.withValues(alpha: 0.25),
-                            ),
+                            gradient: AppColors.brandGradient,
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          child: Row(
+                          child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 22),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                _keySaved ? '✅' : '✨',
-                                style: const TextStyle(fontSize: 14),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  _keySaved
-                                      ? 'OpenAI API key configured — AI generation active'
-                                      : 'Add your OpenAI key to enable real AI generation',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 12,
-                                    color: _keySaved
-                                        ? AppColors.green
-                                        : AppColors.textSecondary,
-                                  ),
-                                ),
-                              ),
+                              Text('Grok AI — Active', style: GoogleFonts.spaceMono(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.brand)),
+                              const SizedBox(height: 3),
+                              Text('Personalized roadmaps powered by xAI Grok. No API key required.', style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary)),
                             ],
                           ),
                         ),
-                        const SizedBox(height: 14),
-                        // Key input
-                        Text(
-                          'OpenAI API Key',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textSecondary,
-                            letterSpacing: 0.3,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Container(
-                          decoration: BoxDecoration(
-                            color: AppColors.bgDark,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppColors.borderLight),
-                          ),
-                          child: TextField(
-                            controller: _openAiKeyCtrl,
-                            obscureText: !_showApiKey,
-                            style: GoogleFonts.spaceMono(
-                              fontSize: 13,
-                              color: AppColors.textPrimary,
-                            ),
-                            decoration: InputDecoration(
-                              hintText: 'sk-...',
-                              hintStyle: GoogleFonts.spaceMono(
-                                fontSize: 13,
-                                color: AppColors.textMuted,
-                              ),
-                              border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 12,
-                              ),
-                              suffixIcon: IconButton(
-                                icon: Icon(
-                                  _showApiKey
-                                      ? Icons.visibility_off_outlined
-                                      : Icons.visibility_outlined,
-                                  size: 18,
-                                  color: AppColors.textMuted,
-                                ),
-                                onPressed: () =>
-                                    setState(() => _showApiKey = !_showApiKey),
-                              ),
-                            ),
-                            onChanged: (_) => setState(() {}),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        // Save button
-                        SizedBox(
-                          width: double.infinity,
-                          height: 42,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: AppColors.brandGradient,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: TextButton(
-                              onPressed: _saveApiKey,
-                              child: Text(
-                                'Save API Key',
-                                style: GoogleFonts.inter(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '🔒  Stored locally only. Never sent to our servers.',
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            color: AppColors.textMuted,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
                       ],
                     ),
-                  ),
+                  ).animate().fadeIn(delay: 250.ms),
                 ],
-              ).animate().fadeIn(delay: 250.ms),
+              ),
 
-              // ── Subscription ─────────────────────────────
+              // ── Plan ──────────────────────────────────
               _Section(
-                title: 'Subscription',
+                title: 'Your Plan',
                 children: [
                   Container(
                     margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
@@ -725,13 +584,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
-                          AppColors.gold.withValues(alpha: 0.12),
-                          AppColors.coral.withValues(alpha: 0.06),
+                          AppColors.brand.withValues(alpha: 0.15),
+                          AppColors.bgCard,
                         ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                          color: AppColors.gold.withValues(alpha: 0.4),
+                          color: AppColors.brand.withValues(alpha: 0.5),
                           width: 1.5),
                     ),
                     child: Column(
@@ -739,21 +600,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       children: [
                         Row(
                           children: [
-                            const Text('👑',
-                                style: TextStyle(fontSize: 18)),
+                            const Text('\u2705', style: TextStyle(fontSize: 18)),
                             const SizedBox(width: 8),
-                            Text('Upgrade to Pro',
+                            Text('All Features Unlocked',
                                 style: GoogleFonts.syne(
                                     fontSize: 16, fontWeight: FontWeight.w800,
-                                    color: AppColors.textPrimary)),
+                                    color: AppColors.brand)),
                           ],
                         ),
                         const SizedBox(height: 10),
                         ...[
-                          '✓ Unlimited roadmaps',
-                          '✓ AI Coach — unlimited messages',
-                          '✓ Advanced analytics',
-                          '✓ Priority support',
+                          '\u2713 Unlimited roadmaps',
+                          '\u2713 Grok AI generation — no key needed',
+                          '\u2713 AI Coach — unlimited messages',
+                          '\u2713 Advanced analytics & badges',
                         ].map((f) => Padding(
                               padding: const EdgeInsets.only(bottom: 4),
                               child: Text(f,
@@ -761,20 +621,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                       fontSize: 13,
                                       color: AppColors.textSecondary)),
                             )),
-                        const SizedBox(height: 14),
-                        Container(
-                          width: double.infinity, height: 46,
-                          decoration: BoxDecoration(
-                            gradient: AppColors.goldGradient,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Center(
-                            child: Text('Upgrade Now',
-                                style: GoogleFonts.syne(
-                                    fontSize: 15, fontWeight: FontWeight.w800,
-                                    color: Colors.white)),
-                          ),
-                        ),
                       ],
                     ),
                   ).animate().fadeIn(delay: 300.ms),
@@ -828,7 +674,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
               ),
 
-              const SizedBox(height: 60),
+              const SizedBox(height: 140),
             ]),
           ),
         ],
