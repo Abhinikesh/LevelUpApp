@@ -1,7 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiConstants {
-  static String baseUrl = "http://10.66.71.97:8000/api";
+  static String baseUrl = "http://localhost:8000/api";
   static String wsUrl = "ws://localhost:8000";
 
   static Future<void> init() async {
@@ -12,10 +12,11 @@ class ApiConstants {
 
       if (isDemoMode) {
         baseUrl = "";
-      } else if (savedUrl != null) {
+      } else if (savedUrl != null && savedUrl.isNotEmpty) {
         baseUrl = savedUrl;
       } else {
-        baseUrl = "http://10.66.71.97:8000/api";
+        // Default: localhost for web/emulator dev, change via Server Settings dialog for physical device
+        baseUrl = "http://localhost:8000/api";
       }
 
       if (baseUrl.isNotEmpty) {
